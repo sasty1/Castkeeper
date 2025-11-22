@@ -1,9 +1,10 @@
 {
   "accountAssociation": {
-    "header": "eyJmaWQiOjg4OTQ5MiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDVFNzlhQTNhRTUxODhQZTE4OGM2ZTZlM2FkOTU0OTk4RDk4YjI3NjAifQ",
+    "header": "eyJmaWQiOjU0MzMzNiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweENFQUNiY0ZjNTcwZjFGNTRFNzg4NjJjRDk2QzU4NDY1NzEwRkYxN2EifQ",
     "payload": "eyJkb21haW4iOiJjYXN0a2VlcGVyLXRzZjMudmVyY2VsLmFwcCJ9",
-    "signature": "MHhkYjQ4..."
-  },
+    "signature": "PSMmYrKElwaj1XE4EOUrHWHN0sJPgXxqDvrt/i6/zIJ2UbObmIcX98TxkZb9uiQNWcVPzpmmI6JYypWbHdNDIBw="
+  }
+}
   "frame": {
     "version": "1",
     "name": "CastKeeper",
