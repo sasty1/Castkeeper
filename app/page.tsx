@@ -30,16 +30,17 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- MANUAL LOGIN FUNCTION (Force Mobile) ---
+  // --- MANUAL LOGIN FUNCTION (The Real Fix) ---
   const handleLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUrl = "https://castkeeper-tsf3.vercel.app";
     
-    // We add 'mobile=true' and 'ui_mode=popup' (ironically helps inline view) to hint the server
+    // Standard Neynar Auth URL
     const authUrl = `https://app.neynar.com/login?client_id=${clientId}&response_type=code&scope=signer_client_write&redirect_uri=${redirectUrl}`;
     
-    // Force redirect in the same window
-    window.location.href = authUrl;
+    // FIX: Use sdk.actions.openUrl to force it into the System Browser (Chrome/Safari).
+    // This makes Neynar detect "Mobile" correctly and hide the QR code.
+    sdk.actions.openUrl(authUrl);
   };
 
   useEffect(() => {
@@ -125,19 +126,15 @@ function CastKeeperApp() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
-
         <div className="z-10 max-w-md w-full space-y-10">
           <div className="space-y-4">
             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
             <p className="text-[#888] text-lg leading-relaxed px-4">
-              Every CastKeeper user can schedule posts and drafts securely.
-              <br />
+              Every CastKeeper user can schedule posts and drafts securely.<br />
               <span className="text-[#555] text-sm mt-2 block">Sign in to access your scheduler.</span>
             </p>
           </div>
-
           <div className="w-full px-2 flex justify-center">
-             {/* MANUAL LOGIN BUTTON */}
              <button 
                onClick={handleLogin}
                className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
