@@ -12,7 +12,7 @@ const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColo
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 function CastKeeperApp() {
-  const { user } = useNeynarContext(); // Removed the invalid 'signIn'
+  const { user } = useNeynarContext(); 
   const [text, setText] = useState('');
   const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,7 +23,7 @@ function CastKeeperApp() {
   const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
 
-  // --- 1. TELL WARPCAST WE ARE READY ---
+  // --- TELL WARPCAST WE ARE READY ---
   useEffect(() => {
     const load = async () => {
       sdk.actions.ready(); 
@@ -34,7 +34,6 @@ function CastKeeperApp() {
     }
   }, [isSDKLoaded]);
 
-  // --- 2. LOAD DRAFTS ---
   useEffect(() => {
     if (user?.fid) {
       const savedDrafts = localStorage.getItem(`drafts_${user.fid}`); 
@@ -42,7 +41,6 @@ function CastKeeperApp() {
     }
   }, [user?.fid]);
 
-  // --- 3. TIMER LOGIC ---
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
     const checkTime = () => {
@@ -114,12 +112,10 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // --- LOGIN SCREEN ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
-
         <div className="z-10 max-w-md w-full space-y-10">
           <div className="space-y-4">
             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
@@ -129,9 +125,7 @@ function CastKeeperApp() {
               <span className="text-[#555] text-sm mt-2 block">Sign in to access your scheduler.</span>
             </p>
           </div>
-
           <div className="w-full px-2 flex justify-center">
-             {/* Using the standard button but with a div wrapper to center it properly */}
              <NeynarAuthButton />
           </div>
         </div>
@@ -139,7 +133,6 @@ function CastKeeperApp() {
     );
   }
 
-  // --- DASHBOARD SCREEN ---
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
@@ -155,7 +148,6 @@ function CastKeeperApp() {
               </button>
               <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
             </div>
-            
             <div className="pt-4 border-t border-white/10 space-y-3">
               {!isScheduled ? (
                 <div className="flex gap-2 items-center">
@@ -174,7 +166,6 @@ function CastKeeperApp() {
             </div>
           </div>
       </div>
-
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
@@ -188,7 +179,6 @@ function CastKeeperApp() {
           </div>
         </div>
       )}
-
       {status && (
         <div className={`absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full backdrop-blur-md text-sm border shadow-xl z-50 flex items-center whitespace-nowrap animate-fade-in-down ${status.type === 'success' ? 'bg-green-900/80 border-green-500 text-green-100' : status.type === 'error' ? 'bg-red-900/80 border-red-500 text-red-100' : 'bg-gray-800/90 border-gray-600 text-white'}`}>
           {status.msg}
