@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
-import { NeynarAPIClient } from "@neynar/nodejs-sdk";
+import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY as string);
+// FIX 1: We now use the Configuration object instead of just a string
+const client = new NeynarAPIClient(
+  new Configuration({
+    apiKey: process.env.NEYNAR_API_KEY as string,
+  })
+);
 
 export async function POST(req: Request) {
   try {
@@ -12,12 +17,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing text or signer' }, { status: 400 });
     }
 
-    await client.publishCast(signerUuid, castText);
+    // FIX 2: publishCast now expects an object, not separate arguments
+    await client.publishCast({
+      signerUuid,
+      text: castText
+    });
 
     return NextResponse.json({ success: true, message: 'Cast published' });
   } catch (error: any) {
     console.error('Cast Error:', error);
     return NextResponse.json({ success: false, error: error.message || 'Failed to cast' }, { status: 500 });
   }
-}	
-
+}
