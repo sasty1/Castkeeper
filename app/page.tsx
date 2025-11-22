@@ -30,15 +30,15 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- MANUAL LOGIN FUNCTION (The Fix) ---
+  // --- MANUAL LOGIN FUNCTION (Force Mobile) ---
   const handleLogin = () => {
-    // We construct the URL manually to force a redirect in the same window
-    // instead of a popup (which opens Chrome)
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUrl = "https://castkeeper-tsf3.vercel.app";
+    
+    // We add 'mobile=true' and 'ui_mode=popup' (ironically helps inline view) to hint the server
     const authUrl = `https://app.neynar.com/login?client_id=${clientId}&response_type=code&scope=signer_client_write&redirect_uri=${redirectUrl}`;
     
-    // This keeps it inside the WebView!
+    // Force redirect in the same window
     window.location.href = authUrl;
   };
 
