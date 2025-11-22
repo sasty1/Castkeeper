@@ -9,7 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@neynar/nodejs-sdk": "^3.96.0",
+    "@neynar/nodejs-sdk": "^3.97.0",
+    "@neynar/react": "^1.2.22",
+    "@pigment-css/react": "^0.0.30",
     "next": "16.0.3",
     "react": "19.2.0",
     "react-dom": "19.2.0"

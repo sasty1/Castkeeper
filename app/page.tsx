@@ -1,294 +1,315 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
+import {
+  NeynarContextProvider,
+  Theme,
+  NeynarAuthButton,
+  useNeynarContext,
+} from "@neynar/react";
+import "@neynar/react/dist/style.css";
 
-interface Draft {
-  id: number;
-  text: string;
-  date: string;
-}
+// --- ICONS ---
+const SendIcon = () => (
+  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+  </svg>
+);
 
-export default function Home() {
-  const [text, setText] = useState('');
-  const [status, setStatus] = useState('');
+const SaveIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const ClockIcon = () => (
+  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+
+function CastKeeperApp() {
+  const { user } = useNeynarContext();
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  
-  // Scheduling states
-  const [targetDate, setTargetDate] = useState<string>('');
+  const [drafts, setDrafts] = useState([]);
+  const [targetDate, setTargetDate] = useState("");
   const [isScheduled, setIsScheduled] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<string>('');
-  
-  // Ref to track the timer interval so we can clear it
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [timeLeft, setTimeLeft] = useState("");
+  const timerRef = useRef(null);
 
-  // 1. Load Drafts & Check for Active Schedule on Startup
+  // Load drafts
   useEffect(() => {
-    // Load Drafts
-    const savedDrafts = localStorage.getItem('cast_drafts');
-    if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
-
-    // Check for an existing active schedule
-    const savedSchedule = localStorage.getItem('cast_schedule');
-    if (savedSchedule) {
-      const parsed = JSON.parse(savedSchedule);
-      // Only resume if the time hasn't passed yet
-      if (new Date(parsed.target).getTime() > Date.now()) {
-        setText(parsed.text);
-        setTargetDate(parsed.target);
-        setIsScheduled(true);
-        setStatus('🔄 Resumed saved schedule');
-      } else {
-        // Clean up old schedule if time passed while closed
-        localStorage.removeItem('cast_schedule');
-      }
+    if (user?.fid) {
+      const saved = localStorage.getItem(`drafts_${user.fid}`);
+      if (saved) setDrafts(JSON.parse(saved));
     }
-  }, []);
+  }, [user?.fid]);
 
-  // 2. The Countdown Logic
+  // Scheduler timer
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
 
-    const checkTime = () => {
+    const tick = () => {
       const now = Date.now();
       const target = new Date(targetDate).getTime();
       const diff = target - now;
 
       if (diff <= 0) {
-        // TIME IS UP!
-        clearInterval(timerRef.current!);
-        handleCast();
+        clearInterval(timerRef.current);
+        handleCast(text);
         resetSchedule();
       } else {
-        // Update display
-        const seconds = Math.floor((diff / 1000) % 60);
-        const minutes = Math.floor((diff / 1000 / 60) % 60);
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const sec = Math.floor((diff / 1000) % 60);
+        const min = Math.floor((diff / 1000 / 60) % 60);
+        const hr = Math.floor((diff / (1000 * 60 * 60)) % 24);
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        
-        setTimeLeft(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+
+        setTimeLeft(`${days}d ${hr}h ${min}m ${sec}s`);
       }
     };
 
-    // Run immediately then every second
-    checkTime();
-    timerRef.current = setInterval(checkTime, 1000);
+    tick();
+    timerRef.current = setInterval(tick, 1000);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isScheduled, targetDate]);
+    return () => clearInterval(timerRef.current);
+  }, [isScheduled, targetDate, text]);
 
-  // Helper: Save Draft
+
   const saveDraft = () => {
     if (!text) return;
-    const newDraft = { id: Date.now(), text, date: new Date().toLocaleString() };
-    const updatedDrafts = [newDraft, ...drafts];
-    setDrafts(updatedDrafts);
-    localStorage.setItem('cast_drafts', JSON.stringify(updatedDrafts));
-    setText('');
-    setStatus('✅ Draft saved locally');
-  };
+    const draft = { id: Date.now(), text, date: new Date().toLocaleString() };
 
-  // Helper: Load Draft
-  const loadDraft = (draft: Draft) => {
-    setText(draft.text);
-  };
-
-  // Helper: Delete Draft
-  const deleteDraft = (id: number) => {
-    const updated = drafts.filter(d => d.id !== id);
+    const updated = [draft, ...drafts];
     setDrafts(updated);
-    localStorage.setItem('cast_drafts', JSON.stringify(updated));
-  };
 
-  // Schedule Functions
-  const startSchedule = () => {
-    if (!targetDate) return;
-    const targetTime = new Date(targetDate).getTime();
-    
-    if (targetTime <= Date.now()) {
-      setStatus('❌ Time must be in the future');
-      return;
+    if (user?.fid) {
+      localStorage.setItem(`drafts_${user.fid}`, JSON.stringify(updated));
     }
 
-    setIsScheduled(true);
-    setStatus('⏳ Scheduled! Keep this tab open.');
-    
-    // Persist schedule to LocalStorage so it survives refresh
-    localStorage.setItem('cast_schedule', JSON.stringify({
-      text: text,
-      target: targetDate
-    }));
+    setText("");
+    setStatus({ msg: "Draft saved", type: "success" });
+    setTimeout(() => setStatus(null), 2500);
   };
 
-  const cancelSchedule = () => {
-    resetSchedule();
-    setStatus('🛑 Schedule cancelled');
+
+  const startSchedule = () => {
+    if (!targetDate) return;
+    if (new Date(targetDate).getTime() <= Date.now()) {
+      setStatus({ msg: "Pick a future time", type: "error" });
+      return;
+    }
+    setIsScheduled(true);
+    setStatus({ msg: "Scheduled. Keep tab open.", type: "neutral" });
   };
+
 
   const resetSchedule = () => {
     setIsScheduled(false);
-    setTimeLeft('');
-    setTargetDate('');
-    localStorage.removeItem('cast_schedule');
-    if (timerRef.current) clearInterval(timerRef.current);
+    setTargetDate("");
+    setTimeLeft("");
+    clearInterval(timerRef.current);
   };
 
-  // API Call
-  const handleCast = async () => {
-    // If triggered by timer, we use state. If manual, we check text.
-    if (!text) return;
-    
+
+  const handleCast = async (msg) => {
+    if (!msg) return;
     setLoading(true);
-    if (!isScheduled) setStatus('🚀 Sending...');
-    
+
     try {
-      const response = await fetch('/api/cast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ castText: text }),
+      const res = await fetch("/api/cast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          castText: msg,
+          signerUuid: user?.signer_uuid,
+        }),
       });
-      
-      const data = await response.json();
-      
+
+      const data = await res.json();
+
       if (data.success) {
-        setStatus(`✅ Published! Hash: ${data.castHash.substring(0, 10)}...`);
-        if (!isScheduled) setText(''); // Clear text if manual send
-        resetSchedule();
+        setStatus({ msg: "Cast posted!", type: "success" });
+        if (!isScheduled) setText("");
       } else {
-        setStatus(`❌ Error: ${data.error}`);
+        setStatus({ msg: data.error || "Failed", type: "error" });
       }
-    } catch (e) {
-      setStatus('❌ Request failed');
-    } finally {
-      setLoading(false);
+    } catch {
+      setStatus({ msg: "Network error", type: "error" });
     }
+
+    setLoading(false);
   };
+
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center space-y-8 p-6">
+        <h1 className="text-5xl font-bold text-white">CastKeeper</h1>
+        <p className="text-gray-400">The pro scheduler. Login to begin.</p>
+        <div className="p-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full">
+          <NeynarAuthButton />
+        </div>
+      </div>
+    );
+  }
+
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-6 bg-black text-white font-sans">
-      <div className="w-full max-w-2xl space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-purple-500">CastKeeper</h1>
-          <span className="text-xs text-gray-500 bg-gray-900 px-2 py-1 rounded">Admin Mode</span>
-        </div>
+    <div className="w-full max-w-lg space-y-6 relative">
 
-        {/* --- MAIN INPUT AREA --- */}
-        <div className="space-y-4">
+      {/* Header */}
+      <div className="flex justify-between items-center px-2">
+        <h1 className="text-xl font-bold text-white">@{user.username}</h1>
+        <div className="scale-75">
+          <NeynarAuthButton variant={Theme.Dark} />
+        </div>
+      </div>
+
+
+      {/* Composer */}
+      <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1">
+        <div className="bg-black/40 rounded-xl p-5 space-y-4">
+
           <textarea
-            className="w-full p-4 text-black rounded-lg border border-gray-700 focus:ring-2 focus:ring-purple-500 outline-none text-lg disabled:bg-gray-300 disabled:text-gray-600"
-            rows={4}
-            placeholder="What's on your mind?"
+            className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]"
+            placeholder="What's happening?"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            disabled={isScheduled || loading} 
+            disabled={loading || isScheduled}
           />
 
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex gap-3">
             <button
-              onClick={handleCast}
-              disabled={loading || !text || isScheduled}
-              className={`flex-1 py-3 px-6 rounded-lg font-bold transition ${
-                loading || !text || isScheduled
-                  ? 'bg-gray-700 cursor-not-allowed text-gray-400' 
-                  : 'bg-purple-600 hover:bg-purple-700 text-white'
-              }`}
+              onClick={() => handleCast(text)}
+              disabled={!text || loading || isScheduled}
+              className="flex-1 flex items-center justify-center py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white"
             >
-              {loading ? 'Publishing...' : 'Cast Now'}
+              {loading ? "Casting..." : <><SendIcon /> Cast Now</>}
             </button>
 
             <button
               onClick={saveDraft}
-              disabled={!text || isScheduled}
-              className="px-6 py-3 rounded-lg font-semibold bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 disabled:opacity-50"
+              disabled={!text}
+              className="bg-gray-800 border border-gray-700 text-gray-300 p-3 rounded-xl"
             >
-              Save Draft
+              <SaveIcon />
             </button>
           </div>
-        </div>
 
-        {/* --- DATE & TIME SCHEDULER --- */}
-        <div className="p-5 bg-gray-900 rounded-xl border border-gray-800">
-          <h2 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
-            <span>📅 Schedule Post</span>
-          </h2>
-          
-          {!isScheduled ? (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input 
-                type="datetime-local" 
-                className="flex-1 p-3 rounded bg-black border border-gray-700 text-white color-scheme-dark"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-              />
-              <button 
-                onClick={startSchedule}
-                disabled={!text || !targetDate}
-                className="px-6 py-3 bg-blue-700 text-white font-bold rounded hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500"
-              >
-                Start Timer
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between bg-blue-900/30 p-4 rounded border border-blue-500/50">
-                <div>
-                  <div className="text-blue-300 text-xs uppercase font-bold mb-1">Time Remaining</div>
-                  <div className="text-white font-mono text-2xl font-bold tracking-wider animate-pulse">
-                    {timeLeft}
-                  </div>
-                  <div className="text-blue-400 text-xs mt-1">
-                    Scheduled for: {new Date(targetDate).toLocaleString()}
-                  </div>
+
+          {/* Scheduler */}
+          <div className="pt-4 border-t border-white/10">
+
+            {!isScheduled ? (
+              <div className="flex gap-2">
+                <input
+                  type="datetime-local"
+                  value={targetDate}
+                  onChange={(e) => setTargetDate(e.target.value)}
+                  className="flex-1 bg-black/50 border border-gray-700 text-white rounded-lg p-2"
+                />
+
+                <button
+                  onClick={startSchedule}
+                  className="bg-gray-800 border border-gray-700 text-white px-4 rounded-lg"
+                >
+                  Schedule
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between">
+                <div className="flex items-center text-purple-200">
+                  <ClockIcon /> {timeLeft}
                 </div>
-                <button 
-                  onClick={cancelSchedule}
-                  className="px-4 py-2 bg-red-500/20 text-red-200 hover:bg-red-500/40 border border-red-500/50 rounded transition"
+                <button
+                  onClick={resetSchedule}
+                  className="bg-red-500/20 text-red-300 px-3 py-1 text-xs rounded-lg"
                 >
                   Cancel
                 </button>
               </div>
-              <div className="text-center text-yellow-500 text-xs bg-yellow-900/20 p-2 rounded">
-                ⚠️ Important: Keep this tab open. If you close it, the cast will not send.
-              </div>
-            </div>
-          )}
+            )}
+
+          </div>
         </div>
-
-        {/* --- STATUS MESSAGE --- */}
-        {status && (
-          <div className="p-4 bg-gray-900 border border-gray-700 rounded-lg text-center text-sm break-all">
-            {status}
-          </div>
-        )}
-
-        {/* --- DRAFTS LIST --- */}
-        {drafts.length > 0 && (
-          <div className="mt-8 pt-8 border-t border-gray-800">
-            <h2 className="text-lg font-semibold mb-4 text-gray-300">Saved Drafts</h2>
-            <div className="space-y-3">
-              {drafts.map((draft) => (
-                <div key={draft.id} className="p-4 bg-gray-900 rounded-lg border border-gray-800 flex justify-between items-start group hover:border-gray-600 transition">
-                  <div 
-                    onClick={() => !isScheduled && loadDraft(draft)}
-                    className={`flex-1 pr-4 ${!isScheduled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                  >
-                    <p className="text-gray-200 line-clamp-2">{draft.text}</p>
-                    <p className="text-xs text-gray-500 mt-2">{draft.date}</p>
-                  </div>
-                  <button 
-                    onClick={() => deleteDraft(draft.id)}
-                    className="text-gray-600 hover:text-red-500 p-1"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
+
+
+      {/* Drafts */}
+      {drafts.length > 0 && (
+        <div>
+          <h3 className="text-gray-500 text-xs uppercase px-2">Saved Drafts</h3>
+
+          <div className="max-h-[200px] overflow-y-auto space-y-2">
+
+            {drafts.map((d) => (
+              <div
+                key={d.id}
+                onClick={() => setText(d.text)}
+                className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 rounded-xl cursor-pointer"
+              >
+                <div className="overflow-hidden">
+                  <p className="text-gray-300 text-sm truncate">{d.text}</p>
+                  <p className="text-gray-600 text-xs">{d.date}</p>
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const updated = drafts.filter((x) => x.id !== d.id);
+                    setDrafts(updated);
+                    localStorage.setItem(`drafts_${user.fid}`, JSON.stringify(updated));
+                  }}
+                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 p-2"
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            ))}
+
+          </div>
+        </div>
+      )}
+
+
+      {/* Toast */}
+      {status && (
+        <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/60 rounded-full border text-white">
+          {status.msg}
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+
+// --- MAIN PAGE WRAPPER ---
+export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 relative">
+
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
+
+      <NeynarContextProvider
+        settings={{
+          clientId: process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "",
+          defaultTheme: Theme.Dark,
+        }}
+      >
+        <CastKeeperApp />
+      </NeynarContextProvider>
+
     </main>
   );
 }
