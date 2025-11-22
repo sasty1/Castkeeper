@@ -30,16 +30,19 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- MANUAL LOGIN FUNCTION (The Real Fix) ---
+  // --- MANUAL LOGIN FUNCTION (Deep Link Fix) ---
   const handleLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
-    const redirectUrl = "https://castkeeper-tsf3.vercel.app";
     
-    // Standard Neynar Auth URL
+    // 1. We tell Neynar: "After login, go to this Deep Link"
+    // This Deep Link forces the phone to open the Warpcast App immediately
+    const deepLink = "https://warpcast.com/~/frames/launch?domain=castkeeper-tsf3.vercel.app";
+    const redirectUrl = encodeURIComponent(deepLink);
+    
+    // 2. Construct the Auth URL
     const authUrl = `https://app.neynar.com/login?client_id=${clientId}&response_type=code&scope=signer_client_write&redirect_uri=${redirectUrl}`;
     
-    // FIX: Use sdk.actions.openUrl to force it into the System Browser (Chrome/Safari).
-    // This makes Neynar detect "Mobile" correctly and hide the QR code.
+    // 3. Open in System Browser (Chrome) so the secure login works
     sdk.actions.openUrl(authUrl);
   };
 
@@ -126,14 +129,17 @@ function CastKeeperApp() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
+
         <div className="z-10 max-w-md w-full space-y-10">
           <div className="space-y-4">
             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
             <p className="text-[#888] text-lg leading-relaxed px-4">
-              Every CastKeeper user can schedule posts and drafts securely.<br />
+              Every CastKeeper user can schedule posts and drafts securely.
+              <br />
               <span className="text-[#555] text-sm mt-2 block">Sign in to access your scheduler.</span>
             </p>
           </div>
+
           <div className="w-full px-2 flex justify-center">
              <button 
                onClick={handleLogin}
@@ -217,4 +223,3 @@ export default function Home() {
       </NeynarContextProvider>
     </main>
   );
-}
