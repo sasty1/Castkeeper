@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjg4OTQ5MiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDVFNzlhQTNhRTUxODhQZTE4OGM2ZTZlM2FkOTU0OTk4RDk4YjI3NjAifQ",
+    "payload": "eyJkb21haW4iOiJjYXN0a2VlcGVyLXRzZjMudmVyY2VsLmFwcCJ9",
+    "signature": "MHhkYjQ4..."
+  },
+  "frame": {
+    "version": "1",
+    "name": "CastKeeper",
+    "iconUrl": "https://castkeeper-tsf3.vercel.app/icon.png",
+    "homeUrl": "https://castkeeper-tsf3.vercel.app",
+    "imageUrl": "https://castkeeper-tsf3.vercel.app/opengraph-image.png",
+    "buttonTitle": "Open Scheduler",
+    "splashImageUrl": "https://castkeeper-tsf3.vercel.app/splash.png",
+    "splashBackgroundColor": "#0a0a0a",
+    "webhookUrl": "https://castkeeper-tsf3.vercel.app/api/webhook"
+  }
+}
