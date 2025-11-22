@@ -5,16 +5,13 @@ import { NeynarContextProvider, Theme, NeynarAuthButton, useNeynarContext } from
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
-// --- ICONS ---
 const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 function CastKeeperApp() {
-  // FIX: REMOVED 'signIn' because it causes the build error
   const { user } = useNeynarContext(); 
-  
   const [text, setText] = useState('');
   const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,20 +22,14 @@ function CastKeeperApp() {
   const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
 
-  // --- TELL WARPCAST WE ARE READY ---
   useEffect(() => {
-    const load = async () => {
-      sdk.actions.ready(); 
-    };
-    if (sdk && !isSDKLoaded) {
-      setIsSDKLoaded(true);
-      load();
-    }
+    const load = async () => { sdk.actions.ready(); };
+    if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
   useEffect(() => {
     if (user?.fid) {
-      const savedDrafts = localStorage.getItem(`drafts_${user.fid}`); 
+      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
     }
   }, [user?.fid]);
@@ -58,7 +49,7 @@ function CastKeeperApp() {
         const minutes = Math.floor((diff / 1000 / 60) % 60);
         const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        setTimeLeft(`${days}d ${hours}h ${minutes}m ${seconds}s`);
+        setTimeLeft(days + "d " + hours + "h " + minutes + "m " + seconds + "s");
       }
     };
     checkTime();
@@ -71,7 +62,7 @@ function CastKeeperApp() {
     const newDraft = { id: Date.now(), text, date: new Date().toLocaleString() };
     const updatedDrafts = [newDraft, ...drafts];
     setDrafts(updatedDrafts);
-    if (user?.fid) localStorage.setItem(`drafts_${user.fid}`, JSON.stringify(updatedDrafts));
+    if (user?.fid) localStorage.setItem("drafts_" + user.fid, JSON.stringify(updatedDrafts));
     setText('');
     setStatus({msg: 'Draft saved!', type: 'success'});
     setTimeout(() => setStatus(null), 3000);
@@ -114,7 +105,6 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // --- LOGIN SCREEN (Back to Standard Button) ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
@@ -123,8 +113,7 @@ function CastKeeperApp() {
           <div className="space-y-4">
             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
             <p className="text-[#888] text-lg leading-relaxed px-4">
-              Every CastKeeper user can schedule posts and drafts securely.
-              <br />
+              Every CastKeeper user can schedule posts and drafts securely.<br />
               <span className="text-[#555] text-sm mt-2 block">Sign in to access your scheduler.</span>
             </p>
           </div>
@@ -136,18 +125,17 @@ function CastKeeperApp() {
     );
   }
 
-  // --- DASHBOARD SCREEN ---
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         <div className="scale-75 origin-right"><NeynarAuthButton /></div>
+         <button onClick={() => { localStorage.clear(); location.reload(); }} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20">Sign Out</button>
       </div>
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
-            <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder={`What's happening?`} value={text} onChange={(e) => setText(e.target.value)} disabled={isScheduled || loading} />
+            <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} disabled={isScheduled || loading} />
             <div className="flex gap-3 pt-2">
-              <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={`flex-1 flex items-center justify-center py-3 rounded-xl font-bold transition-all duration-200 ${loading || !text || isScheduled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]'}`}>
+              <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold transition-all duration-200 " + (loading || !text || isScheduled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]')}>
                 {loading ? 'Casting...' : <><SendIcon /> Cast Now</>}
               </button>
               <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
@@ -177,14 +165,14 @@ function CastKeeperApp() {
             {drafts.map((draft: any) => (
               <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
                 <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem(`drafts_${user.fid}`, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
               </div>
             ))}
           </div>
         </div>
       )}
       {status && (
-        <div className={`absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full backdrop-blur-md text-sm border shadow-xl z-50 flex items-center whitespace-nowrap animate-fade-in-down ${status.type === 'success' ? 'bg-green-900/80 border-green-500 text-green-100' : status.type === 'error' ? 'bg-red-900/80 border-red-500 text-red-100' : 'bg-gray-800/90 border-gray-600 text-white'}`}>
+        <div className={"absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full backdrop-blur-md text-sm border shadow-xl z-50 flex items-center whitespace-nowrap animate-fade-in-down " + (status.type === 'success' ? 'bg-green-900/80 border-green-500 text-green-100' : status.type === 'error' ? 'bg-red-900/80 border-red-500 text-red-100' : 'bg-gray-800/90 border-gray-600 text-white')}>
           {status.msg}
         </div>
       )}
