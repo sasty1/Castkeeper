@@ -135,7 +135,7 @@ function CastKeeperApp() {
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         {/* FIX IS HERE: Removed variant={Theme.Dark} */}
+         {/* FIX IS HERE: Removed  */}
          <div className="scale-75 origin-right"><NeynarAuthButton /></div>
       </div>
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
