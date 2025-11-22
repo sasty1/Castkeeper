@@ -103,7 +103,6 @@ function CastKeeperApp() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
-        {/* Subtle Purple Glow */}
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
 
         <div className="z-10 max-w-md w-full space-y-10">
@@ -136,7 +135,8 @@ function CastKeeperApp() {
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         <div className="scale-75 origin-right"><NeynarAuthButton variant={Theme.Dark} /></div>
+         {/* FIX IS HERE: Removed variant={Theme.Dark} */}
+         <div className="scale-75 origin-right"><NeynarAuthButton /></div>
       </div>
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
