@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { NeynarContextProvider, Theme, NeynarAuthButton, useNeynarContext } from "@neynar/react";
-import sdk from '@farcaster/frame-sdk'; // <--- NEW IMPORT
+import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
 // --- ICONS ---
@@ -21,18 +21,18 @@ function CastKeeperApp() {
   const [isScheduled, setIsScheduled] = useState(false);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const timerRef = useRef<any>(null);
+  const [isSDKLoaded, setIsSDKLoaded] = useState(false);
 
-  // --- NEW: TELL WARPCAST WE ARE READY ---
+  // --- TELL WARPCAST WE ARE READY ---
   useEffect(() => {
     const load = async () => {
-      sdk.actions.ready(); // <--- This removes the Splash Screen
+      sdk.actions.ready(); 
     };
     if (sdk && !isSDKLoaded) {
       setIsSDKLoaded(true);
       load();
     }
-  }, []);
-  const [isSDKLoaded, setIsSDKLoaded] = useState(false);
+  }, [isSDKLoaded]);
 
   useEffect(() => {
     if (user?.fid) {
@@ -112,7 +112,7 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // --- LOGIN SCREEN (Monad Style) ---
+  // --- LOGIN SCREEN ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
@@ -128,15 +128,9 @@ function CastKeeperApp() {
             </p>
           </div>
 
-          <div className="w-full px-2">
-             <div className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] transition-colors rounded-2xl p-1.5 shadow-lg shadow-purple-900/20 group cursor-pointer relative overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                   <span className="text-white font-semibold text-lg">Sign In with Farcaster</span>
-                </div>
-                <div className="opacity-0 w-full h-14 relative z-20">
-                   <NeynarAuthButton className="w-full h-full" />
-                </div>
-             </div>
+          {/* STANDARD BUTTON (Fixes Mobile Redirect Issues) */}
+          <div className="w-full px-2 flex justify-center">
+             <NeynarAuthButton />
           </div>
         </div>
       </div>
