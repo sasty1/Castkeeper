@@ -7,8 +7,8 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CastKeeper",
   description: "The pro scheduler for Farcaster",
+  referrer: "origin-when-cross-origin", // <--- THIS FIXES THE LOGIN BUG
   other: {
-    // This makes it a Frame!
     "fc:frame": "vNext",
     "fc:frame:image": "https://placehold.co/1200x630/5E5CE6/ffffff?text=CastKeeper+Scheduler",
     "fc:frame:button:1": "🚀 Launch App",
