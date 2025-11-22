@@ -12,7 +12,9 @@ const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColo
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 function CastKeeperApp() {
+  // FIX: REMOVED 'signIn' because it causes the build error
   const { user } = useNeynarContext(); 
+  
   const [text, setText] = useState('');
   const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
@@ -112,6 +114,7 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
+  // --- LOGIN SCREEN (Back to Standard Button) ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
@@ -133,11 +136,12 @@ function CastKeeperApp() {
     );
   }
 
+  // --- DASHBOARD SCREEN ---
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         <button onClick={() => { localStorage.clear(); location.reload(); }} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20">Sign Out</button>
+         <div className="scale-75 origin-right"><NeynarAuthButton /></div>
       </div>
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
