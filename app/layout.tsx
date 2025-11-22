@@ -24,8 +24,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* THIS IS THE NUCLEAR FIX */}
-        <meta name="referrer" content="origin-when-cross-origin" />
+        {/* FORCE THE BROWSER TO SEND THE URL */}
+        <meta name="referrer" content="unsafe-url" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>
