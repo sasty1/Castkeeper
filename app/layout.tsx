@@ -7,9 +7,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CastKeeper",
   description: "The pro scheduler for Farcaster",
-  // --- THIS LINE FIXES THE LOGIN ERROR ---
+  // ---------------------------------------------------------
+  // 👇 THIS IS THE FIX FOR THE "DOCUMENT.REFERRER" ERROR 👇
   referrer: "origin-when-cross-origin",
-  // ---------------------------------------
+  // ---------------------------------------------------------
   other: {
     "fc:frame": "vNext",
     "fc:frame:image": "https://placehold.co/1200x630/5E5CE6/ffffff?text=CastKeeper+Scheduler",
