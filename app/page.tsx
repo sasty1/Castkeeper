@@ -14,28 +14,52 @@ const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fi
 function CastKeeperApp() {
   const { user } = useNeynarContext(); 
   const [text, setText] = useState('');
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
-  const [drafts, setDrafts] = useState([]);
-  const [targetDate, setTargetDate] = useState('');
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [targetDate, setTargetDate] = useState<string>('');
   const [isScheduled, setIsScheduled] = useState(false);
-  const [timeLeft, setTimeLeft] = useState('');
+  const [timeLeft, setTimeLeft] = useState<string>('');
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
-  // Calculate Auth URL
+
+  // Calculate Auth URL with FORCE MOBILE param
   const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
   const redirectUrl = "https://castkeeper-tsf3.vercel.app";
-  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl;
+  
+  // Added &mobile=true to force the button view instead of QR code
+  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl + "&mobile=true";
 
   useEffect(() => {
     const load = async () => { sdk.actions.ready(); };
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // ... (Keeping existing logic short for brevity, functionality remains same)
-  const handleCastDirectly = async (textToCast: any) => { /* ... logic ... */ };
-  const saveDraft = () => { /* ... logic ... */ };
-  const startSchedule = () => { /* ... logic ... */ };
-  const resetSchedule = () => { /* ... logic ... */ };
+  useEffect(() => {
+    if (user?.fid) {
+      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
+      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
+    }
+  }, [user?.fid]);
+
+  // ... (Scheduler logic same as before)
+  const handleCastDirectly = async (textToCast: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/cast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ castText: textToCast, signerUuid: user?.signer_uuid }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setStatus({msg: 'Published successfully!', type: 'success'});
+        setText(''); 
+      } else {
+        setStatus({msg: data.error, type: 'error'});
+      }
+    } catch (e) { setStatus({msg: 'Network error', type: 'error'}); } 
+    finally { setLoading(false); }
+  };
 
   if (!user) {
     return (
@@ -49,7 +73,6 @@ function CastKeeperApp() {
             </p>
           </div>
           <div className="w-full px-2 flex justify-center">
-             {/* PURE HTML LINK - Best for passing Referrer on Android */}
              <a 
                href={authUrl}
                className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 no-underline"
@@ -73,7 +96,9 @@ function CastKeeperApp() {
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
              <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
              <div className="flex gap-3 pt-2">
-                <button className="flex-1 bg-blue-600 text-white py-3 rounded-xl">Cast (Demo)</button>
+                <button onClick={() => handleCastDirectly(text)} disabled={loading || !text} className="flex-1 bg-blue-600 text-white py-3 rounded-xl">
+                  {loading ? 'Casting...' : 'Cast Now'}
+                </button>
              </div>
           </div>
       </div>
@@ -85,6 +110,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 overflow-hidden relative">
        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
+       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
        <NeynarContextProvider settings={{ clientId: process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "", defaultTheme: Theme.Dark, eventsCallbacks: { onAuthSuccess: () => {}, onSignout: () => {} } }}>
         <CastKeeperApp />
       </NeynarContextProvider>
