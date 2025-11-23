@@ -11,18 +11,19 @@ export default function LoginPage() {
 
   const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
   
-  // IMPORTANT: This must match the Authorized Origin exactly
+  // 1. Redirect back to your website (which is whitelisted)
   const redirectUrl = "https://castkeeper-tsf3.vercel.app"; 
   
-  // FIX: Added 'ui_mode=popup' + 'mobile=true' to kill the QR code
-  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl + "&mobile=true&ui_mode=popup";
+  // 2. THE FIX: Removed '&ui_mode=popup' 
+  // Added '&is_mobile=true' alongside 'mobile=true' to cover all bases
+  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl + "&mobile=true&is_mobile=true";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-white p-6 text-center">
       <div className="max-w-md w-full space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Connect Farcaster</h1>
         <p className="text-gray-400">
-          Please confirm the connection to enable scheduling.
+          Tap the button below to authorize CastKeeper.
         </p>
         
         <a 
