@@ -26,14 +26,17 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // --- DIRECT SDK LOGIN (Solution 1) ---
   const handleLogin = () => {
-    // BRIDGE STRATEGY:
-    // 1. Open our own /login page in Chrome (System Browser)
-    // 2. User clicks button THERE (in Chrome)
-    // 3. Referrer exists, Neynar allows login
-    // 4. Redirects back to app
-    const bridgeUrl = "https://castkeeper-tsf3.vercel.app/login";
-    sdk.actions.openUrl(bridgeUrl);
+    const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
+    // Redirect back to the main app, NOT the login bridge
+    const redirectUrl = "https://castkeeper-tsf3.vercel.app"; 
+    
+    // We point directly to Neynar
+    const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl;
+    
+    // Use the SDK to open it. Warpcast will handle the context.
+    sdk.actions.openUrl(authUrl);
   };
 
   useEffect(() => {
@@ -154,6 +157,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 overflow-hidden relative">
        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
+       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
        <NeynarContextProvider settings={{ clientId: process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "", defaultTheme: Theme.Dark, eventsCallbacks: { onAuthSuccess: () => {}, onSignout: () => {} } }}>
         <CastKeeperApp />
       </NeynarContextProvider>
