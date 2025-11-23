@@ -27,7 +27,7 @@ function CastKeeperApp() {
   }, [isSDKLoaded]);
 
   const handleLogin = () => {
-    // Open the bridge page in Chrome
+    // Open the bridge page in Chrome using SDK
     sdk.actions.openUrl("https://castkeeper-tsf3.vercel.app/login");
   };
 
