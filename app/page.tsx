@@ -19,7 +19,6 @@ function CastKeeperApp() {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUri = "https://castkeeper-tsf3.vercel.app";
 
-    // Build URL using ONLY string concatenation
     let loginUrl = "https://app.neynar.com/login";
     loginUrl += "?client_id=" + clientId;
     loginUrl += "&response_type=code";
@@ -30,13 +29,13 @@ function CastKeeperApp() {
 
     const wrapped = "https://warpcast.com/~/add-cast?url=" + encodeURIComponent(loginUrl);
 
-    // Debug popup so we can SEE the final URL
-    alert("Opening: " + wrapped);
+    alert("DEBUG URL:\n\n" + wrapped);
 
     try {
       sdk.actions.openUrl(wrapped);
-    } catch (e) {
-      alert("openUrl error: " + e.toString());
+    } catch (err) {
+      const message = err && (err + "");
+      alert("openUrl error: " + message);
     }
   };
 
