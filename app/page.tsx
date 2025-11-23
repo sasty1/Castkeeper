@@ -1,5 +1,4 @@
 "use client";
-// FORCE REBUILD 123
 
 import { useState, useEffect, useRef } from 'react';
 import { NeynarContextProvider, Theme, useNeynarContext } from "@neynar/react";
@@ -31,10 +30,15 @@ function CastKeeperApp() {
 
   const handleLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
-    const deepLink = "https://warpcast.com/~/frames/launch?domain=castkeeper-tsf3.vercel.app";
-    const redirectUrl = encodeURIComponent(deepLink);
+    // We direct back to the website URL (not the warpcast app URL)
+    // Because we are staying INSIDE the embedded browser the whole time.
+    const redirectUrl = "https://castkeeper-tsf3.vercel.app";
+    
     const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl;
-    sdk.actions.openUrl(authUrl);
+    
+    // IMPORTANT: We use window.location.href instead of sdk.openUrl
+    // This keeps the login flow inside the Warpcast frame so cookies are shared.
+    window.location.href = authUrl;
   };
 
   useEffect(() => {

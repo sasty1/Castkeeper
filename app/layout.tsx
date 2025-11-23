@@ -7,8 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "CastKeeper",
   description: "The pro scheduler for Farcaster",
-  // THIS IS THE FIX FOR MOBILE LOGIN:
-  referrer: "origin-when-cross-origin",
+  referrer: "unsafe-url",
   other: {
     "fc:frame": "vNext",
     "fc:frame:image": "https://placehold.co/1200x630/5E5CE6/ffffff?text=CastKeeper+Scheduler",
@@ -25,6 +24,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="referrer" content="unsafe-url" />
+      </head>
       <body className={inter.className}>{children}</body>
     </html>
   );
