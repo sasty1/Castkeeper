@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { NeynarContextProvider, Theme, useNeynarContext } from "@neynar/react";
 import sdk from "@farcaster/frame-sdk";
 import "@neynar/react/dist/style.css";
@@ -17,22 +16,19 @@ function CastKeeperApp() {
 
   const handleLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
-    const redirectUri = "https://castkeeper-tsf3.vercel.app";
+    const redirect = "https://castkeeper-tsf3.vercel.app";
 
-    let loginUrl = "https://app.neynar.com/login";
-    loginUrl += "?client_id=" + clientId;
-    loginUrl += "&response_type=code";
-    loginUrl += "&scope=signer_client_write";
-    loginUrl += "&redirect_uri=" + encodeURIComponent(redirectUri);
-    loginUrl += "&mode=mobile";
-    loginUrl += "&prompt=consent";
+    const raw =
+      "https://app.neynar.com/login?client_id=" +
+      clientId +
+      "&response_type=code&scope=signer_client_write&redirect_uri=" +
+      encodeURIComponent(redirect) +
+      "&mode=mobile&prompt=consent";
 
-    const wrapped = "https://warpcast.com/~/add-cast?url=" + encodeURIComponent(loginUrl);
-
-    alert("DEBUG URL:\n\n" + wrapped);
+    const finalUrl = "https://warpcast.com/~/add-cast?url=" + encodeURIComponent(raw);
 
     try {
-      sdk.actions.openUrl(wrapped);
+      sdk.actions.openUrl(finalUrl);
     } catch (err) {
       const message = err && (err + "");
       alert("openUrl error: " + message);
@@ -41,13 +37,12 @@ function CastKeeperApp() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6">
-        <h1 className="text-5xl font-medium text-white">CastKeeper</h1>
-        <p className="text-[#888] text-lg px-4">Sign in to access your scheduler.</p>
-
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-center p-6">
+        <h1 className="text-4xl font-bold text-white">CastKeeper</h1>
+        <p className="text-gray-400 mt-2">Sign in to access your scheduler.</p>
         <button
           onClick={handleLogin}
-          className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2"
+          className="mt-6 w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-xl flex items-center justify-center gap-2"
         >
           <FarcasterIcon />
           Sign In with Farcaster
