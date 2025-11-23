@@ -13,6 +13,7 @@ const FarcasterIcon = () => (
 
 function CastKeeperApp() {
   const { user } = useNeynarContext();
+console.log("CLIENT ID:", process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID);
 
   const handleLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
