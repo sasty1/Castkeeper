@@ -10,7 +10,7 @@ export function GET() {
     frames: [
       {
         path: "/",
-        name: "CastKeeper",
+        name: "Main"
       }
     ]
   });
