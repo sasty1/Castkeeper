@@ -26,17 +26,9 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- DIRECT SDK LOGIN (Solution 1) ---
   const handleLogin = () => {
-    const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
-    // Redirect back to the main app, NOT the login bridge
-    const redirectUrl = "https://castkeeper-tsf3.vercel.app"; 
-    
-    // We point directly to Neynar
-    const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl;
-    
-    // Use the SDK to open it. Warpcast will handle the context.
-    sdk.actions.openUrl(authUrl);
+    // Open the bridge page in Chrome
+    sdk.actions.openUrl("https://castkeeper-tsf3.vercel.app/login");
   };
 
   useEffect(() => {

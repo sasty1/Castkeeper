@@ -4,22 +4,24 @@ import { useEffect, useState } from "react";
 
 export default function LoginPage() {
   const [isMounted, setIsMounted] = useState(false);
-  
   useEffect(() => { setIsMounted(true); }, []);
 
   if (!isMounted) return null;
 
   const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
   
-  // 1. Redirect back to your website (which is whitelisted)
+  // 1. Redirect back to your website
   const redirectUrl = "https://castkeeper-tsf3.vercel.app"; 
   
-  // 2. THE FIX: Removed '&ui_mode=popup' 
-  // Added '&is_mobile=true' alongside 'mobile=true' to cover all bases
-  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl + "&mobile=true&is_mobile=true";
+  // 2. THE SECRET SAUCE: &mode=mobile &prompt=consent
+  // This forces Neynar to show the button, even if it thinks you are a desktop.
+  const authUrl = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + redirectUrl + "&mobile=true&mode=mobile&prompt=consent";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-white p-6 text-center">
+      <head>
+        <meta name="referrer" content="no-referrer-when-downgrade" />
+      </head>
       <div className="max-w-md w-full space-y-8">
         <h1 className="text-3xl font-bold tracking-tight">Connect Farcaster</h1>
         <p className="text-gray-400">
