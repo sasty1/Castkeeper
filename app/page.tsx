@@ -21,14 +21,29 @@ function CastKeeperApp() {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
 
+  // --- SDK READY SIGNAL ---
   useEffect(() => {
     const load = async () => { sdk.actions.ready(); };
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // --- CLEAN LOGIN LOGIC (Solution 1 + 3) ---
   const handleLogin = () => {
-    // Open the bridge page in Chrome using SDK
-    sdk.actions.openUrl("https://castkeeper-tsf3.vercel.app/login");
+    const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
+    // We use the root domain because it is already whitelisted
+    const redirectUri = "https://castkeeper-tsf3.vercel.app"; 
+
+    const url =
+      "https://app.neynar.com/login" +
+      "?client_id=" + clientId +
+      "&response_type=code" +
+      "&scope=signer_client_write" +
+      "&redirect_uri=" + encodeURIComponent(redirectUri) +
+      "&mode=mobile" +    // Force mobile UI
+      "&prompt=consent";  // Force fresh login check
+
+    // Open in System Browser (Chrome) to handle referrer correctly
+    sdk.actions.openUrl(url);
   };
 
   useEffect(() => {
