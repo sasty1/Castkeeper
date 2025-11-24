@@ -5,15 +5,12 @@ export const dynamic = 'force-dynamic';
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 
 export async function POST() {
-  console.log("--- STARTING SIGNER CREATION ---");
-
   if (!NEYNAR_API_KEY) {
     return NextResponse.json({ error: "Server Error: API Key missing" }, { status: 500 });
   }
 
   try {
-    // FIX: Use 'x-api-key' and send empty body '{}'
-    // This ensures Neynar generates the full response with the deep link.
+    // 1. Create Signer
     const response = await fetch("https://api.neynar.com/v2/farcaster/signer", {
       method: "POST",
       headers: {
@@ -25,20 +22,23 @@ export async function POST() {
     });
 
     const responseText = await response.text();
-    console.log("Neynar Response:", responseText);
-
     if (!response.ok) {
       return NextResponse.json({ error: "Neynar Failed: " + responseText }, { status: 500 });
     }
 
     const data = JSON.parse(responseText);
     
-    // Fallback: Check both possible field names for the link
-    const approvalUrl = data.signer_approval_url || data.link;
+    // 2. GET THE LINK (Or build it manually if missing)
+    let approvalUrl = data.signer_approval_url || data.link;
+
+    // FALLBACK: If Neynar didn't give us a link, we build one using the Public Key
+    if (!approvalUrl && data.public_key) {
+      console.log("Building manual approval link...");
+      approvalUrl = "https://warpcast.com/~/add-signer?public_key=" + data.public_key + "&name=CastKeeper";
+    }
 
     if (!approvalUrl) {
-      console.error("MISSING LINK IN DATA:", data);
-      return NextResponse.json({ error: "Neynar created signer but returned no link." }, { status: 500 });
+      return NextResponse.json({ error: "Failed to generate approval link." }, { status: 500 });
     }
     
     return NextResponse.json({ 
