@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
-import { NeynarAPIClient } from "@neynar/nodejs-sdk";
+import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY as string);
+// FIX: Use the Configuration object structure
+const client = new NeynarAPIClient(
+  new Configuration({
+    apiKey: process.env.NEYNAR_API_KEY as string,
+  })
+);
 
 export async function POST() {
   try {
