@@ -1,49 +1,56 @@
 import { NextResponse } from "next/server";
-import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
+import { NeynarAPIClient } from "@neynar/nodejs-sdk";
 
-// Ensure API Key exists
+// 1. Force Next.js to run this dynamically (fixes Vercel env var issues)
+export const dynamic = 'force-dynamic';
+
+// 2. Ensure API Key is present
 const apiKey = process.env.NEYNAR_API_KEY;
+
 if (!apiKey) {
-  console.error("❌ NEYNAR_API_KEY is missing in environment variables!");
+  console.error("CRITICAL ERROR: NEYNAR_API_KEY is missing!");
 }
 
-const client = new NeynarAPIClient(
-  new Configuration({
-    apiKey: apiKey || "DUMMY_KEY_TO_PREVENT_CRASH",
-  })
-);
+// 3. Initialize Client (Simplified)
+// We pass the object directly instead of using new Configuration()
+const client = new NeynarAPIClient({
+  apiKey: apiKey || "dummy_key", 
+});
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
     if (!apiKey) {
-      return NextResponse.json({ error: "Server Error: Missing API Key" }, { status: 500 });
+      return NextResponse.json({ error: "Server Configuration Error: Missing API Key" }, { status: 500 });
     }
 
+    console.log("Attempting to create signer...");
     const signer = await client.createSigner();
+    
+    // Cast to any to avoid TypeScript strictness
     const s = signer as any;
+    console.log("Signer created:", s.signer_uuid);
 
     return NextResponse.json({ 
       signerUuid: s.signer_uuid, 
       link: s.link || s.signer_approval_url 
     });
   } catch (error: any) {
-    console.error("Signer Creation Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to create signer" }, { status: 500 });
+    console.error("Signer POST Error:", error);
+    return NextResponse.json({ error: error.message || "Unknown error creating signer" }, { status: 500 });
   }
 }
 
 export async function GET(req: Request) {
   try {
-    // Safer URL parsing
-    const url = new URL(req.url);
-    const signerUuid = url.searchParams.get('signerUuid');
+    const { searchParams } = new URL(req.url);
+    const signerUuid = searchParams.get('signerUuid');
     
     if (!signerUuid) return NextResponse.json({ error: 'Missing uuid' }, { status: 400 });
 
     const signer = await client.lookupSigner({ signerUuid });
     return NextResponse.json(signer);
   } catch (error: any) {
-    console.error("Signer Lookup Error:", error);
+    console.error("Signer GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
