@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
-import { NeynarAPIClient, Configuration } from "@neynar/nodejs-sdk";
 
-// FIX 1: We now use the Configuration object instead of just a string
-const client = new NeynarAPIClient(
-  new Configuration({
-    apiKey: process.env.NEYNAR_API_KEY as string,
-  })
-);
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
+  const apiKey = process.env.NEYNAR_API_KEY;
+  
   try {
     const body = await req.json();
     const { castText, signerUuid } = body;
@@ -17,11 +13,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Missing text or signer' }, { status: 400 });
     }
 
-    // FIX 2: publishCast now expects an object, not separate arguments
-    await client.publishCast({
-      signerUuid,
-      text: castText
+    // Direct Fetch to Cast
+    const response = await fetch("https://api.neynar.com/v2/farcaster/cast", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api_key": apiKey || "",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        signer_uuid: signerUuid,
+        text: castText
+      })
     });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json({ success: false, error: data.message || "Failed to publish" });
+    }
 
     return NextResponse.json({ success: true, message: 'Cast published' });
   } catch (error: any) {

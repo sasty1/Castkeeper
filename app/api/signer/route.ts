@@ -1,42 +1,40 @@
 import { NextResponse } from "next/server";
-import { NeynarAPIClient } from "@neynar/nodejs-sdk";
 
-// 1. Force Next.js to run this dynamically (fixes Vercel env var issues)
 export const dynamic = 'force-dynamic';
 
-// 2. Ensure API Key is present
-const apiKey = process.env.NEYNAR_API_KEY;
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 
-if (!apiKey) {
-  console.error("CRITICAL ERROR: NEYNAR_API_KEY is missing!");
-}
+export async function POST() {
+  if (!NEYNAR_API_KEY) {
+    return NextResponse.json({ error: "Server: Missing API Key" }, { status: 500 });
+  }
 
-// 3. Initialize Client (Simplified)
-// We pass the object directly instead of using new Configuration()
-const client = new NeynarAPIClient({
-  apiKey: apiKey || "dummy_key", 
-});
-
-export async function POST(req: Request) {
   try {
-    if (!apiKey) {
-      return NextResponse.json({ error: "Server Configuration Error: Missing API Key" }, { status: 500 });
+    // 1. Request a Signer directly from Neynar API (Bypassing SDK)
+    const response = await fetch("https://api.neynar.com/v2/farcaster/signer", {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api_key": NEYNAR_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error("Neynar API Failed: " + errText);
     }
 
-    console.log("Attempting to create signer...");
-    const signer = await client.createSigner();
+    const data = await response.json();
     
-    // Cast to any to avoid TypeScript strictness
-    const s = signer as any;
-    console.log("Signer created:", s.signer_uuid);
-
+    // 2. Return the data needed for the frontend
     return NextResponse.json({ 
-      signerUuid: s.signer_uuid, 
-      link: s.link || s.signer_approval_url 
+      signerUuid: data.signer_uuid, 
+      link: data.signer_approval_url 
     });
+
   } catch (error: any) {
     console.error("Signer POST Error:", error);
-    return NextResponse.json({ error: error.message || "Unknown error creating signer" }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -47,8 +45,22 @@ export async function GET(req: Request) {
     
     if (!signerUuid) return NextResponse.json({ error: 'Missing uuid' }, { status: 400 });
 
-    const signer = await client.lookupSigner({ signerUuid });
-    return NextResponse.json(signer);
+    // 3. Check Signer Status directly
+    const response = await fetch("https://api.neynar.com/v2/farcaster/signer?signer_uuid=" + signerUuid, {
+      method: "GET",
+      headers: {
+        "accept": "application/json",
+        "api_key": NEYNAR_API_KEY || "",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch signer status");
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+
   } catch (error: any) {
     console.error("Signer GET Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
