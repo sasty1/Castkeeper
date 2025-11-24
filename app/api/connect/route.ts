@@ -2,31 +2,27 @@ import { NextResponse } from "next/server";
 
 export const dynamic = 'force-dynamic';
 
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-
 export async function POST() {
-  console.log("--- DEBUG: STARTING CONNECT POST ---");
-
-  if (!NEYNAR_API_KEY) {
-    console.error("❌ ERROR: NEYNAR_API_KEY is missing in Vercel!");
-    return NextResponse.json({ error: "Server Error: API Key missing" }, { status: 500 });
-  }
-
   try {
-    // 1. Request a Signer directly from Neynar API (Raw Fetch)
+    const apiKey = process.env.NEYNAR_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json({ error: "Configuration Error: NEYNAR_API_KEY is missing on Vercel." }, { status: 500 });
+    }
+
+    // 1. Request Signer via raw HTTP (No SDK to avoid library errors)
     const response = await fetch("https://api.neynar.com/v2/farcaster/signer", {
       method: "POST",
       headers: {
         "accept": "application/json",
-        "api_key": NEYNAR_API_KEY,
+        "api_key": apiKey,
       },
     });
 
     const responseText = await response.text();
-    console.log("Neynar Response:", responseText);
-
+    
     if (!response.ok) {
-      return NextResponse.json({ error: "Neynar Failed: " + responseText }, { status: 500 });
+      return NextResponse.json({ error: "Neynar API Error: " + responseText }, { status: 500 });
     }
 
     const data = JSON.parse(responseText);
@@ -37,7 +33,6 @@ export async function POST() {
     });
 
   } catch (error: any) {
-    console.error("Signer Creation Crash:", error);
     return NextResponse.json({ error: "Server Crash: " + error.message }, { status: 500 });
   }
 }
@@ -46,6 +41,7 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const signerUuid = searchParams.get('signerUuid');
+    const apiKey = process.env.NEYNAR_API_KEY;
     
     if (!signerUuid) return NextResponse.json({ error: 'Missing uuid' }, { status: 400 });
 
@@ -53,14 +49,11 @@ export async function GET(req: Request) {
       method: "GET",
       headers: {
         "accept": "application/json",
-        "api_key": NEYNAR_API_KEY || "",
+        "api_key": apiKey || "",
       },
     });
 
-    if (!response.ok) {
-      // If pending, just return status without erroring
-      return NextResponse.json({ status: "pending" });
-    }
+    if (!response.ok) return NextResponse.json({ status: "pending" });
 
     const data = await response.json();
     return NextResponse.json(data);

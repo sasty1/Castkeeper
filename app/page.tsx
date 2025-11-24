@@ -54,12 +54,17 @@ function CastKeeperApp() {
   const requestSigner = async () => {
     setLoading(true);
     try {
-      // POINTING TO NEW ROUTE TO BYPASS CACHED ERRORS
       const res = await fetch('/api/connect', { method: 'POST' });
       const data = await res.json();
       
+      // SAFETY CHECK: If the server returned an error, STOP here.
       if (!res.ok || data.error) {
          throw new Error(data.error || 'Signer Setup Failed');
+      }
+      
+      // SAFETY CHECK: Ensure the link actually exists before opening
+      if (!data.link) {
+         throw new Error("Server returned no approval link");
       }
       
       sdk.actions.openUrl(data.link);
@@ -79,6 +84,7 @@ function CastKeeperApp() {
       }, 2000);
       
     } catch (e: any) {
+      // This will now show the REAL error (e.g. "API Key missing") on your phone
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
     }
@@ -91,7 +97,6 @@ function CastKeeperApp() {
     }
   }, [user?.fid]);
 
-  // ... Scheduler Logic ...
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
     const checkTime = () => {
