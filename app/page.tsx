@@ -9,6 +9,7 @@ const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="current
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.5 15.5a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077l4.774-4.566A6 6 0 0115 7zm0 2a2 2 0 100-4 2 2 0 000 4z" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
   const [user, setUser] = useState<any>(null);
@@ -22,6 +23,9 @@ function CastKeeperApp() {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
+  
+  // NEW: Store the approval URL so we can show it manually
+  const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => { 
@@ -61,15 +65,16 @@ function CastKeeperApp() {
          throw new Error(data.error || 'Signer Setup Failed');
       }
       
-      // --- THE FIX FOR ANDROID ---
-      // We convert the 'https://' link to a 'warpcast://' link.
-      // This forces the Android OS to handle it as an App Action, not a Web Page.
+      // Convert to deep link
       let deepLink = data.link;
       if (deepLink.startsWith("https://warpcast.com/")) {
         deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
       }
+
+      // Save it for manual button
+      setApprovalUrl(deepLink);
       
-      console.log("Opening Deep Link:", deepLink);
+      // Try auto-open
       sdk.actions.openUrl(deepLink);
       
       const checkStatus = setInterval(async () => {
@@ -82,6 +87,7 @@ function CastKeeperApp() {
               localStorage.setItem("signer_" + user.fid, data.signerUuid);
               setStatus({msg: 'Posting enabled!', type: 'success'});
               setLoading(false);
+              setApprovalUrl(null); // Hide manual button
             }
         } catch(ignored) {}
       }, 2000);
@@ -199,9 +205,21 @@ function CastKeeperApp() {
              <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
              <div className="flex gap-3 pt-2">
                 {!signerUuid ? (
-                  <button onClick={requestSigner} disabled={loading} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all">
-                    {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting</>}
-                  </button>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <button onClick={requestSigner} disabled={loading} className="w-full flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all">
+                      {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting</>}
+                    </button>
+                    
+                    {/* THE FIX: MANUAL LINK BUTTON */}
+                    {loading && approvalUrl && (
+                      <button 
+                        onClick={() => sdk.actions.openUrl(approvalUrl)} 
+                        className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center py-2"
+                      >
+                        <LinkIcon /> Tap here if approval screen didn't open
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <button onClick={() => handleCastDirectly(text)} disabled={loading || !text} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all">
                     {loading ? 'Casting...' : <><SendIcon /> Cast Now</>}
@@ -209,6 +227,8 @@ function CastKeeperApp() {
                 )}
                 <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
              </div>
+             
+             {/* Scheduler UI */}
              <div className="pt-4 border-t border-white/10 space-y-3">
               {!isScheduled ? (
                 <div className="flex gap-2 items-center">
