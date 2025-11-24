@@ -12,9 +12,7 @@ const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColo
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 function CastKeeperApp() {
-  // Manually manage user state instead of NeynarContext for Native Login
   const [user, setUser] = useState<any>(null);
-  
   const [text, setText] = useState('');
   const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
@@ -28,8 +26,6 @@ function CastKeeperApp() {
   useEffect(() => {
     const load = async () => { 
       sdk.actions.ready(); 
-      
-      // OPTIONAL: Check if Context already has a user
       const context = await sdk.context;
       if (context?.user) {
         setUser(context.user);
@@ -38,19 +34,20 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- NATIVE AUTH FLOW (The Fix) ---
+  // --- NATIVE AUTH FLOW (Typescript Fixed) ---
   const handleNativeLogin = async () => {
     try {
       setLoading(true);
-      // 1. Get a nonce from our backend
       const nonceRes = await fetch('/api/auth/nonce');
+      if (!nonceRes.ok) throw new Error("Failed to get nonce");
       const { nonce } = await nonceRes.json();
 
-      // 2. Request Native Sign In (Stays inside Warpcast!)
       const result = await sdk.actions.signIn({ nonce });
       
-      // 3. Update User State
-      setUser(result.user);
+      // FIX: Cast result to 'any' to bypass the build error.
+      // We also check sdk.context as a fallback to ensure we get the user.
+      setUser((result as any).user || (await sdk.context).user);
+      
       setStatus({msg: 'Signed in successfully!', type: 'success'});
     } catch (e) {
       console.error(e);
@@ -60,7 +57,7 @@ function CastKeeperApp() {
     }
   };
 
-  // ... Drafts and Scheduler Logic ...
+  // ... Logic ...
   useEffect(() => {
     if (user?.fid) {
       const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
@@ -114,9 +111,6 @@ function CastKeeperApp() {
   const handleCastDirectly = async (textToCast: string) => {
     setLoading(true);
     try {
-      // NOTE: Native login does not return a 'signer_uuid' automatically.
-      // This post might fail until we implement a Signer Request flow.
-      // But let's get the login working first!
       const response = await fetch('/api/cast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,7 +151,7 @@ function CastKeeperApp() {
     );
   }
 
-  // --- DASHBOARD UI (Same as before) ---
+  // --- DASHBOARD UI ---
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
@@ -182,7 +176,6 @@ function CastKeeperApp() {
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 overflow-hidden relative">
-       {/* Backgrounds */}
        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
        <CastKeeperApp />
