@@ -17,8 +17,6 @@ const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="current
 function CastKeeperApp() {
   const { user: neynarUser } = useNeynarContext(); 
   const [frameUser, setFrameUser] = useState<any>(null);
-  
-  // Combine users: Use Frame user if available, otherwise Neynar user
   const user = frameUser || neynarUser;
 
   const [text, setText] = useState('');
@@ -31,17 +29,15 @@ function CastKeeperApp() {
   const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   
-  // STATE FOR MANUAL LINK
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
 
+  // --- INITIAL LOAD ---
   useEffect(() => {
     const load = async () => { 
       try {
-        // 1. Try to get context from Frame SDK (Auto-Login)
         const context = await sdk.context;
         if (context?.user) {
-          console.log("Frame User Detected:", context.user);
           setFrameUser({
             fid: context.user.fid,
             username: context.user.username,
@@ -49,14 +45,11 @@ function CastKeeperApp() {
           });
         }
         sdk.actions.ready(); 
-      } catch(e) {
-        console.error("SDK Error:", e);
-      }
+      } catch(e) {}
     };
     if (!isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // Load local settings once we have a user
   useEffect(() => {
     if (user?.fid) {
       const savedSigner = localStorage.getItem("signer_" + user.fid);
@@ -67,27 +60,20 @@ function CastKeeperApp() {
     }
   }, [user]);
 
-  // --- LOGIN LOGIC (Fallback for Web) ---
   const handleWebLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUri = "https://castkeeper-tsf3.vercel.app"; 
-    const url = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + encodeURIComponent(redirectUri) + "&mode=mobile&prompt=consent";
-    // Use standard window.location to fix "referrer" error
-    window.location.href = url;
+    window.location.href = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + encodeURIComponent(redirectUri) + "&mode=mobile&prompt=consent";
   };
 
-  // --- SIGNER REQUEST LOGIC ---
   const requestSigner = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/connect', { method: 'POST' });
       const data = await res.json();
-      
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
       setApprovalUrl(data.link);
-      
-      // Try auto-open
       try { sdk.actions.openUrl(data.link); } catch(e) { window.open(data.link, '_blank'); }
       
       const checkStatus = setInterval(async () => {
@@ -111,7 +97,7 @@ function CastKeeperApp() {
     }
   };
 
-  // ... Scheduler Timer ...
+  // --- SCHEDULER LOGIC ---
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
     const checkTime = () => {
@@ -119,7 +105,9 @@ function CastKeeperApp() {
       const target = new Date(targetDate).getTime();
       const diff = target - now;
       if (diff <= 0) {
-        handleCastDirectly(text); resetSchedule();
+        // TIME IS UP: Cast immediately
+        clearInterval(timerRef.current);
+        handleCastDirectly(text, true); // Pass true to indicate this is a scheduled cast
       } else {
         const seconds = Math.floor((diff / 1000) % 60);
         const minutes = Math.floor((diff / 1000 / 60) % 60);
@@ -144,20 +132,26 @@ function CastKeeperApp() {
   };
 
   const startSchedule = () => {
+    // FIX: Block scheduling if no signer
+    if (!signerUuid) {
+      setStatus({msg: 'Tap "Enable Posting" first!', type: 'error'});
+      return;
+    }
     if (!targetDate) return;
     setIsScheduled(true);
     setStatus({msg: 'Scheduled! Keep tab open.', type: 'neutral'});
   };
 
-  const resetSchedule = () => {
+  const resetSchedule = (keepMessage = false) => {
     setIsScheduled(false);
     setTimeLeft('');
-    setStatus({msg: 'Schedule cancelled', type: 'neutral'});
+    if (!keepMessage) setStatus({msg: 'Schedule cancelled', type: 'neutral'});
   };
 
-  const handleCastDirectly = async (textToCast: string) => {
+  const handleCastDirectly = async (textToCast: string, fromSchedule = false) => {
     if (!signerUuid) {
       setStatus({msg: 'Please enable posting first', type: 'error'});
+      if (fromSchedule) resetSchedule(true); // Stop schedule, keep error msg
       return;
     }
     setLoading(true);
@@ -170,34 +164,32 @@ function CastKeeperApp() {
       const data = await response.json();
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
-        if(!isScheduled) setText(''); 
+        if (fromSchedule) {
+            resetSchedule(true); // Stop schedule, keep success msg
+            setText('');
+        } else {
+            setText(''); 
+        }
       } else {
         setStatus({msg: data.error, type: 'error'});
+        if (fromSchedule) setIsScheduled(false);
       }
-    } catch (e) { setStatus({msg: 'Network error', type: 'error'}); } 
+    } catch (e) { 
+        setStatus({msg: 'Network error', type: 'error'}); 
+        if (fromSchedule) setIsScheduled(false);
+    } 
     finally { setLoading(false); }
   };
 
-  // --- LOGIN UI ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
         <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
         <div className="z-10 max-w-md w-full space-y-10">
           <div className="space-y-4">
-            <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
-            <p className="text-[#888] text-lg leading-relaxed px-4">
-              The pro scheduler for Farcaster.<br />
-              <span className="text-[#555] text-sm mt-2 block">Sign in to access your dashboard.</span>
-            </p>
-          </div>
-          <div className="w-full px-2 flex justify-center">
-             <button 
-               onClick={handleWebLogin}
-               className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
-             >
-               <FarcasterIcon />
-               Sign In with Farcaster
+             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
+             <button onClick={handleWebLogin} className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2">
+               <FarcasterIcon /> Sign In
              </button>
           </div>
         </div>
@@ -205,7 +197,6 @@ function CastKeeperApp() {
     );
   }
 
-  // --- DASHBOARD UI ---
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
@@ -226,25 +217,21 @@ function CastKeeperApp() {
             <div className="flex gap-3 pt-2">
               {!signerUuid ? (
                 <div className="flex-1 flex flex-col gap-2">
-                  <button onClick={requestSigner} disabled={loading} className="w-full flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all">
-                    {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting</>}
+                  <button onClick={requestSigner} disabled={loading} className="w-full flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all animate-pulse">
+                    {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting (Required)</>}
                   </button>
                   {loading && approvalUrl && (
-                    <button 
-                      onClick={() => { try { sdk.actions.openUrl(approvalUrl); } catch(e) { window.open(approvalUrl, '_blank'); } }} 
-                      className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center"
-                    >
-                      <LinkIcon /> Tap here if approval screen didn't open
+                    <button onClick={() => { try { sdk.actions.openUrl(approvalUrl); } catch(e) { window.open(approvalUrl, '_blank'); } }} className="w-full text-xs text-yellow-400 underline flex items-center justify-center">
+                      <LinkIcon /> Tap here manually
                     </button>
                   )}
                 </div>
               ) : (
-                <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold transition-all duration-200 " + (loading || !text || isScheduled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-blue-500/30 hover:scale-[1.02]')}>
+                <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold transition-all duration-200 " + (loading || !text || isScheduled ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg')}>
                   {loading ? 'Casting...' : <><SendIcon /> Cast Now</>}
                 </button>
               )}
-              
-              <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
+              <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl"><SaveIcon /></button>
             </div>
             
             <div className="pt-4 border-t border-white/10 space-y-3">
@@ -254,31 +241,29 @@ function CastKeeperApp() {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
                     <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
                   </div>
-                  <button onClick={startSchedule} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Schedule</button>
+                  <button onClick={startSchedule} className={"px-4 py-2.5 rounded-lg text-sm font-semibold border transition-colors " + (!signerUuid ? "bg-gray-800 text-gray-500 cursor-not-allowed border-gray-800" : "bg-gray-800 hover:bg-gray-700 text-white border-gray-700")}>
+                    Schedule
+                  </button>
                 </div>
               ) : (
                 <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
                   <div className="flex items-center text-purple-200 font-mono"><ClockIcon /> <span className="font-bold tracking-wider">{timeLeft}</span></div>
-                  <button onClick={resetSchedule} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20">Cancel</button>
+                  <button onClick={() => resetSchedule()} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg border border-red-500/20">Cancel</button>
                 </div>
               )}
             </div>
           </div>
       </div>
-
+      
+      {/* Drafts List */}
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
           <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
             {drafts.map((draft: any) => (
-              <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
-                <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { 
-                  e.stopPropagation(); 
-                  const newDrafts = drafts.filter((d: any) => d.id !== draft.id); 
-                  setDrafts(newDrafts); 
-                  if (user?.fid) localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); 
-                }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+              <div key={draft.id} onClick={() => setText(draft.text)} className="flex justify-between items-center p-4 bg-white/5 rounded-xl cursor-pointer">
+                <p className="text-gray-300 text-sm truncate">{draft.text}</p>
+                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2"><TrashIcon /></button>
               </div>
             ))}
           </div>
