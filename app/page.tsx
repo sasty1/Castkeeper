@@ -32,7 +32,7 @@ function CastKeeperApp() {
 
   useEffect(() => {
     const load = async () => { 
-      sdk.actions.ready(); 
+      try { sdk.actions.ready(); } catch(e) {}
       
       // Check if we already have a signer saved locally
       if (user?.fid) {
@@ -48,7 +48,7 @@ function CastKeeperApp() {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUri = "https://castkeeper-tsf3.vercel.app"; 
     const url = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + encodeURIComponent(redirectUri) + "&mode=mobile&prompt=consent";
-    sdk.actions.openUrl(url); 
+    try { sdk.actions.openUrl(url); } catch(e) { window.location.href = url; }
   };
 
   // --- SIGNER REQUEST LOGIC ---
@@ -64,7 +64,7 @@ function CastKeeperApp() {
       setApprovalUrl(data.link);
       
       // 2. Try to open automatically
-      sdk.actions.openUrl(data.link);
+      try { sdk.actions.openUrl(data.link); } catch(e) { window.open(data.link, '_blank'); }
       
       // 3. Start polling for approval
       const checkStatus = setInterval(async () => {
@@ -74,7 +74,12 @@ function CastKeeperApp() {
             if (statusData.status === 'approved') {
               clearInterval(checkStatus);
               setSignerUuid(data.signerUuid);
-              localStorage.setItem("signer_" + user.fid, data.signerUuid);
+              
+              // FIX: Check if user exists before using .fid
+              if (user?.fid) {
+                localStorage.setItem("signer_" + user.fid, data.signerUuid);
+              }
+
               setStatus({msg: 'Posting enabled!', type: 'success'});
               setLoading(false);
               setApprovalUrl(null); // Hide the manual button
@@ -218,7 +223,7 @@ function CastKeeperApp() {
                   {/* MANUAL FALLBACK BUTTON: Only shows if stuck on loading */}
                   {loading && approvalUrl && (
                     <button 
-                      onClick={() => sdk.actions.openUrl(approvalUrl)} 
+                      onClick={() => { try { sdk.actions.openUrl(approvalUrl); } catch(e) { window.open(approvalUrl, '_blank'); } }} 
                       className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center"
                     >
                       <LinkIcon /> Tap here if approval screen didn't open
@@ -261,7 +266,12 @@ function CastKeeperApp() {
             {drafts.map((draft: any) => (
               <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
                 <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+                <button onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const newDrafts = drafts.filter((d: any) => d.id !== draft.id); 
+                  setDrafts(newDrafts); 
+                  if (user?.fid) localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); 
+                }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
               </div>
             ))}
           </div>
