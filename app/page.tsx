@@ -51,11 +51,25 @@ function CastKeeperApp() {
     if (!isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
-  // --- 2. LOAD SAVED DATA ---
+  // --- 2. LOAD & RESTORE STATE (THE FIX) ---
   useEffect(() => {
     if (user?.fid) {
+      // Restore Completed Signer
       const savedSigner = localStorage.getItem("signer_" + user.fid);
-      if (savedSigner) setSignerUuid(savedSigner);
+      if (savedSigner) {
+        setSignerUuid(savedSigner);
+      } else {
+        // Restore PENDING Signer (The magic fix)
+        const pending = localStorage.getItem("pending_signer_" + user.fid);
+        const pendingUrl = localStorage.getItem("pending_link_" + user.fid);
+        
+        if (pending && pendingUrl) {
+          setPendingSignerUuid(pending);
+          setApprovalUrl(pendingUrl);
+          // Auto-check immediately in case they just came back
+          checkSignerStatus(pending);
+        }
+      }
       
       const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
@@ -72,6 +86,12 @@ function CastKeeperApp() {
       
       if (!res.ok || data.error) throw new Error(data.error || 'Setup Failed');
       
+      // SAVE STATE TO DISK so it survives app minimize
+      if (user?.fid) {
+        localStorage.setItem("pending_signer_" + user.fid, data.signerUuid);
+        localStorage.setItem("pending_link_" + user.fid, data.link);
+      }
+
       setApprovalUrl(data.link);
       setPendingSignerUuid(data.signerUuid);
       setLoading(false);
@@ -98,7 +118,12 @@ function CastKeeperApp() {
         
         if (statusData.status === 'approved') {
           setSignerUuid(uuidToCheck);
-          if (user?.fid) localStorage.setItem("signer_" + user.fid, uuidToCheck);
+          if (user?.fid) {
+             localStorage.setItem("signer_" + user.fid, uuidToCheck);
+             // Cleanup pending
+             localStorage.removeItem("pending_signer_" + user.fid);
+             localStorage.removeItem("pending_link_" + user.fid);
+          }
           
           setStatus({msg: 'Posting enabled!', type: 'success'});
           setLoading(false);
@@ -140,7 +165,6 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // --- SCHEDULER ---
   const resetSchedule = (keepMessage = false) => {
     setIsScheduled(false);
     setTimeLeft('');
@@ -168,7 +192,6 @@ function CastKeeperApp() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isScheduled, targetDate, text]);
 
-  // --- UI RENDER ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 text-white">
@@ -198,14 +221,11 @@ function CastKeeperApp() {
             <div className="flex flex-col gap-3 pt-2">
               <div className="flex gap-3">
                   {!signerUuid ? (
-                    // IF NO LINK YET: Show Setup Button
                     !approvalUrl ? (
                         <button onClick={prepareSigner} disabled={loading} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gray-700 text-white">
                             {loading ? 'Preparing...' : 'Setup Posting'}
                         </button>
                     ) : (
-                        // FIX: Use a standard <a href> tag instead of SDK.actions.openUrl
-                        // This prevents the app from crashing/minimizing unexpectedly.
                         <a href={approvalUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white animate-pulse no-underline">
                             Authenticate Now ↗
                         </a>
@@ -217,7 +237,6 @@ function CastKeeperApp() {
                   )}
               </div>
 
-              {/* MANUAL APPROVAL UI */}
               {approvalUrl && !signerUuid && (
                   <div className="flex flex-col gap-2 mt-2 p-4 bg-white/5 border border-white/10 rounded-xl">
                       <p className="text-xs text-gray-400 text-center">Tap "Authenticate Now" above. If it fails:</p>
@@ -237,7 +256,7 @@ function CastKeeperApp() {
             <div className="pt-4 border-t border-white/10 space-y-3">
               {!isScheduled ? (
                 <div className="flex gap-2 items-center">
-                  <div className="relative flex-1">
+                   <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
                     <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
                   </div>
