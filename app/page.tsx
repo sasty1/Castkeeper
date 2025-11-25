@@ -15,7 +15,12 @@ const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentC
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
-  const { user } = useNeynarContext(); 
+  const { user: neynarUser } = useNeynarContext(); 
+  const [frameUser, setFrameUser] = useState<any>(null);
+  
+  // Combine users: Use Frame user if available, otherwise Neynar user
+  const user = frameUser || neynarUser;
+
   const [text, setText] = useState('');
   const [status, setStatus] = useState<{msg: string, type: 'success'|'error'|'neutral'} | null>(null);
   const [loading, setLoading] = useState(false);
@@ -32,23 +37,43 @@ function CastKeeperApp() {
 
   useEffect(() => {
     const load = async () => { 
-      try { sdk.actions.ready(); } catch(e) {}
-      
-      // Check if we already have a signer saved locally
-      if (user?.fid) {
-        const saved = localStorage.getItem("signer_" + user.fid);
-        if (saved) setSignerUuid(saved);
+      try {
+        // 1. Try to get context from Frame SDK (Auto-Login)
+        const context = await sdk.context;
+        if (context?.user) {
+          console.log("Frame User Detected:", context.user);
+          setFrameUser({
+            fid: context.user.fid,
+            username: context.user.username,
+            pfp: context.user.pfpUrl
+          });
+        }
+        sdk.actions.ready(); 
+      } catch(e) {
+        console.error("SDK Error:", e);
       }
     };
-    if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
-  }, [isSDKLoaded, user]);
+    if (!isSDKLoaded) { setIsSDKLoaded(true); load(); }
+  }, [isSDKLoaded]);
 
-  // --- LOGIN LOGIC ---
-  const handleLogin = () => {
+  // Load local settings once we have a user
+  useEffect(() => {
+    if (user?.fid) {
+      const savedSigner = localStorage.getItem("signer_" + user.fid);
+      if (savedSigner) setSignerUuid(savedSigner);
+
+      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
+      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
+    }
+  }, [user]);
+
+  // --- LOGIN LOGIC (Fallback for Web) ---
+  const handleWebLogin = () => {
     const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
     const redirectUri = "https://castkeeper-tsf3.vercel.app"; 
     const url = "https://app.neynar.com/login?client_id=" + clientId + "&response_type=code&scope=signer_client_write&redirect_uri=" + encodeURIComponent(redirectUri) + "&mode=mobile&prompt=consent";
-    try { sdk.actions.openUrl(url); } catch(e) { window.location.href = url; }
+    // Use standard window.location to fix "referrer" error
+    window.location.href = url;
   };
 
   // --- SIGNER REQUEST LOGIC ---
@@ -60,13 +85,11 @@ function CastKeeperApp() {
       
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
-      // 1. Save the URL so we can show the manual button
       setApprovalUrl(data.link);
       
-      // 2. Try to open automatically
+      // Try auto-open
       try { sdk.actions.openUrl(data.link); } catch(e) { window.open(data.link, '_blank'); }
       
-      // 3. Start polling for approval
       const checkStatus = setInterval(async () => {
         try {
             const poll = await fetch("/api/connect?signerUuid=" + data.signerUuid);
@@ -74,15 +97,10 @@ function CastKeeperApp() {
             if (statusData.status === 'approved') {
               clearInterval(checkStatus);
               setSignerUuid(data.signerUuid);
-              
-              // FIX: Check if user exists before using .fid
-              if (user?.fid) {
-                localStorage.setItem("signer_" + user.fid, data.signerUuid);
-              }
-
+              if (user?.fid) localStorage.setItem("signer_" + user.fid, data.signerUuid);
               setStatus({msg: 'Posting enabled!', type: 'success'});
               setLoading(false);
-              setApprovalUrl(null); // Hide the manual button
+              setApprovalUrl(null); 
             }
         } catch(ignored) {}
       }, 2000);
@@ -93,14 +111,7 @@ function CastKeeperApp() {
     }
   };
 
-  // ... Drafts/Scheduler Logic ...
-  useEffect(() => {
-    if (user?.fid) {
-      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
-      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
-    }
-  }, [user?.fid]);
-
+  // ... Scheduler Timer ...
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
     const checkTime = () => {
@@ -182,7 +193,7 @@ function CastKeeperApp() {
           </div>
           <div className="w-full px-2 flex justify-center">
              <button 
-               onClick={handleLogin}
+               onClick={handleWebLogin}
                className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
              >
                <FarcasterIcon />
@@ -213,14 +224,11 @@ function CastKeeperApp() {
             />
             
             <div className="flex gap-3 pt-2">
-              {/* DYNAMIC BUTTON LOGIC */}
               {!signerUuid ? (
                 <div className="flex-1 flex flex-col gap-2">
                   <button onClick={requestSigner} disabled={loading} className="w-full flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all">
                     {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting</>}
                   </button>
-                  
-                  {/* MANUAL FALLBACK BUTTON: Only shows if stuck on loading */}
                   {loading && approvalUrl && (
                     <button 
                       onClick={() => { try { sdk.actions.openUrl(approvalUrl); } catch(e) { window.open(approvalUrl, '_blank'); } }} 
@@ -258,7 +266,6 @@ function CastKeeperApp() {
           </div>
       </div>
 
-      {/* Drafts List */}
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
