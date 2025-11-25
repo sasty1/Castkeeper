@@ -1,22 +1,30 @@
-import { verifySignInMessage } from '@farcaster/auth';
+import { verifySignInMessage } from '@farcaster/auth-client';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
     const { signature, message } = await req.json();
     
-    // Verify the signature implies ownership of the FID
-    const { valid, fid } = await verifySignInMessage(signature, message);
-    
-    if (!valid) {
-      return NextResponse.json({ error: 'invalid signature' }, { status: 401 });
+    // 1. Verify that the signature matches the message and comes from the claimed FID
+    const result = await verifySignInMessage({
+      message,
+      signature,
+      domain: 'castkeeper-tsf3.vercel.app', // Optional: helps with security checks
+    });
+
+    // 2. Check if verification passed
+    if (!result.isSuccess) {
+      return NextResponse.json({ error: 'Invalid signature', details: result.error }, { status: 401 });
     }
-    
-    // In a real app, you would create a session JWT here. 
-    // For now, we return the FID and success status.
-    return NextResponse.json({ success: true, fid });
-    
+
+    // 3. Return the FID (User ID) to the frontend
+    return NextResponse.json({ 
+      success: true, 
+      fid: result.fid 
+    });
+
   } catch (error) {
-    return NextResponse.json({ error: 'server error' }, { status: 500 });
+    console.error('Verification error:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

@@ -16,7 +16,8 @@
     "@pigment-css/react": "^0.0.30",
     "next": "16.0.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "viem": "^2.40.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
