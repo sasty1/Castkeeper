@@ -3,28 +3,27 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { signature, message } = await req.json();
-    
-    // 1. Verify that the signature matches the message and comes from the claimed FID
-    const result = await verifySignInMessage({
-      message,
-      signature,
-      domain: 'castkeeper-tsf3.vercel.app', // Optional: helps with security checks
-    });
+    const { message, signature } = await req.json();
 
-    // 2. Check if verification passed
-    if (!result.isSuccess) {
-      return NextResponse.json({ error: 'Invalid signature', details: result.error }, { status: 401 });
+    // 1. Verify using the new signature format (message, signature)
+    const { valid, fid } = await verifySignInMessage(message, signature);
+
+    if (!valid) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // 3. Return the FID (User ID) to the frontend
-    return NextResponse.json({ 
-      success: true, 
-      fid: result.fid 
-    });
+    // 2. Optional: extra domain check (recommended)
+    const domain = new URL(req.headers.get('origin') || '').hostname;
+    if (message.includes(domain)) {
+      // (Optional logic: You can enforce domain matching here if needed)
+    }
 
+    // 3. Create your session
+    const token = "dummy-jwt-for-fid-" + fid; 
+
+    return NextResponse.json({ token, fid });
   } catch (error) {
-    console.error('Verification error:', error);
+    console.error('Verify error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
