@@ -11,7 +11,6 @@ const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="current
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.5 15.5a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077l4.774-4.566A6 6 0 0115 7zm0 2a2 2 0 100-4 2 2 0 000 4z" /></svg>;
 const CopyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>;
 
 function CastKeeperApp() {
@@ -63,9 +62,7 @@ function CastKeeperApp() {
     }
   }, [user]);
 
-  // --- 3. TWO-STEP SIGNER FLOW (FIXES BLOCKER) ---
-  
-  // Step A: Prepare (Async - talks to API)
+  // --- 3. TWO-STEP SIGNER FLOW ---
   const prepareSigner = async () => {
     setLoading(true);
     setStatus({msg: 'Generating keys...', type: 'neutral'});
@@ -75,25 +72,14 @@ function CastKeeperApp() {
       
       if (!res.ok || data.error) throw new Error(data.error || 'Setup Failed');
       
-      // Save data but DO NOT OPEN yet
       setApprovalUrl(data.link);
       setPendingSignerUuid(data.signerUuid);
       setLoading(false);
-      setStatus({msg: 'Ready. Tap "Authenticate" below.', type: 'neutral'});
+      setStatus({msg: 'Tap "Authenticate" below.', type: 'neutral'});
       
     } catch (e: any) {
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
-    }
-  };
-
-  // Step B: Open (Sync - User Click)
-  const openApprovalLink = () => {
-    if (approvalUrl) {
-      // Use SDK action to open link properly in Farcaster
-      sdk.actions.openUrl(approvalUrl);
-      
-      setStatus({msg: 'After approving, tap "I Approved It"', type: 'neutral'});
     }
   };
 
@@ -218,13 +204,13 @@ function CastKeeperApp() {
                             {loading ? 'Preparing...' : 'Setup Posting'}
                         </button>
                     ) : (
-                        // IF LINK READY: Show Authenticate Button (Sync Action)
-                        <button onClick={openApprovalLink} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white animate-pulse">
+                        // FIX: Use a standard <a href> tag instead of SDK.actions.openUrl
+                        // This prevents the app from crashing/minimizing unexpectedly.
+                        <a href={approvalUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white animate-pulse no-underline">
                             Authenticate Now ↗
-                        </button>
+                        </a>
                     )
                   ) : (
-                    // IF SIGNER EXISTS: Show Cast Button
                     <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold " + (loading || !text || isScheduled ? 'bg-gray-700' : 'bg-gradient-to-r from-blue-600 to-purple-600') + " text-white shadow-lg"}>
                       {loading ? 'Casting...' : 'Cast Now'}
                     </button>
