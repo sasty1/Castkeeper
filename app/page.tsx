@@ -12,7 +12,7 @@ const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.5 15.5a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077l4.774-4.566A6 6 0 0115 7zm0 2a2 2 0 100-4 2 2 0 000 4z" /></svg>;
-const ExternalLinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
+const CopyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>;
 
 function CastKeeperApp() {
   const { user: neynarUser } = useNeynarContext(); 
@@ -34,6 +34,7 @@ function CastKeeperApp() {
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
   const [pendingSignerUuid, setPendingSignerUuid] = useState<string | null>(null);
 
+  // --- 1. FRAME SDK INIT ---
   useEffect(() => {
     const load = async () => { 
       try {
@@ -51,6 +52,7 @@ function CastKeeperApp() {
     if (!isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // --- 2. LOAD SAVED DATA ---
   useEffect(() => {
     if (user?.fid) {
       const savedSigner = localStorage.getItem("signer_" + user.fid);
@@ -61,22 +63,23 @@ function CastKeeperApp() {
     }
   }, [user]);
 
-  const requestSigner = async () => {
+  // --- 3. TWO-STEP SIGNER FLOW (FIXES BLOCKER) ---
+  
+  // Step A: Prepare (Async - talks to API)
+  const prepareSigner = async () => {
     setLoading(true);
-    setStatus({msg: 'Creating signer...', type: 'neutral'});
+    setStatus({msg: 'Generating keys...', type: 'neutral'});
     try {
       const res = await fetch('/api/connect', { method: 'POST' });
       const data = await res.json();
       
-      if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
+      if (!res.ok || data.error) throw new Error(data.error || 'Setup Failed');
       
+      // Save data but DO NOT OPEN yet
       setApprovalUrl(data.link);
       setPendingSignerUuid(data.signerUuid);
-      
-      // Try to auto-open, but don't rely on it
-      try { sdk.actions.openUrl(data.link); } catch(e) {}
-      
-      setStatus({msg: 'Tap the link below to approve', type: 'neutral'});
+      setLoading(false);
+      setStatus({msg: 'Ready. Tap "Authenticate" below.', type: 'neutral'});
       
     } catch (e: any) {
       setStatus({msg: e.message, type: 'error'});
@@ -84,9 +87,26 @@ function CastKeeperApp() {
     }
   };
 
+  // Step B: Open (Sync - User Click)
+  const openApprovalLink = () => {
+    if (approvalUrl) {
+      // Use SDK action to open link properly in Farcaster
+      sdk.actions.openUrl(approvalUrl);
+      
+      setStatus({msg: 'After approving, tap "I Approved It"', type: 'neutral'});
+    }
+  };
+
+  const copyLink = () => {
+    if (approvalUrl) {
+      navigator.clipboard.writeText(approvalUrl);
+      setStatus({msg: 'Link copied! Paste in browser.', type: 'success'});
+    }
+  };
+
   const checkSignerStatus = async (uuidToCheck: string) => {
     try {
-        setStatus({msg: 'Checking approval...', type: 'neutral'});
+        setStatus({msg: 'Verifying...', type: 'neutral'});
         const poll = await fetch("/api/connect?signerUuid=" + uuidToCheck);
         const statusData = await poll.json();
         
@@ -99,7 +119,7 @@ function CastKeeperApp() {
           setApprovalUrl(null); 
           setPendingSignerUuid(null);
         } else {
-           setStatus({msg: 'Still pending. Did you approve in the other window?', type: 'error'});
+           setStatus({msg: 'Not approved yet. Try again.', type: 'error'});
         }
     } catch(e: any) {
         setStatus({msg: 'Network check failed', type: 'error'});
@@ -134,7 +154,7 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // ... Helper functions for Scheduler ...
+  // --- SCHEDULER ---
   const resetSchedule = (keepMessage = false) => {
     setIsScheduled(false);
     setTimeLeft('');
@@ -162,7 +182,7 @@ function CastKeeperApp() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isScheduled, targetDate, text]);
 
-  // --- UI ---
+  // --- UI RENDER ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 text-white">
@@ -192,35 +212,42 @@ function CastKeeperApp() {
             <div className="flex flex-col gap-3 pt-2">
               <div className="flex gap-3">
                   {!signerUuid ? (
-                    <button onClick={requestSigner} disabled={loading} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 text-white">
-                        {loading ? 'Working...' : 'Enable Posting'}
-                    </button>
+                    // IF NO LINK YET: Show Setup Button
+                    !approvalUrl ? (
+                        <button onClick={prepareSigner} disabled={loading} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gray-700 text-white">
+                            {loading ? 'Preparing...' : 'Setup Posting'}
+                        </button>
+                    ) : (
+                        // IF LINK READY: Show Authenticate Button (Sync Action)
+                        <button onClick={openApprovalLink} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white animate-pulse">
+                            Authenticate Now ↗
+                        </button>
+                    )
                   ) : (
-                    <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold " + (loading || !text || isScheduled ? 'bg-gray-700' : 'bg-blue-600') + " text-white"}>
+                    // IF SIGNER EXISTS: Show Cast Button
+                    <button onClick={() => handleCastDirectly(text)} disabled={loading || !text || isScheduled} className={"flex-1 flex items-center justify-center py-3 rounded-xl font-bold " + (loading || !text || isScheduled ? 'bg-gray-700' : 'bg-gradient-to-r from-blue-600 to-purple-600') + " text-white shadow-lg"}>
                       {loading ? 'Casting...' : 'Cast Now'}
                     </button>
                   )}
               </div>
 
-              {/* === THE FIX: DIRECT LINK === */}
+              {/* MANUAL APPROVAL UI */}
               {approvalUrl && !signerUuid && (
-                  <div className="flex flex-col gap-2 mt-2 p-3 bg-yellow-900/20 border border-yellow-700/50 rounded-xl animate-fade-in">
-                      <p className="text-xs text-yellow-200 text-center">1. Tap this link to approve:</p>
-                      <a href={approvalUrl} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-white text-black font-bold py-2 rounded-lg text-sm">
-                         Tap Here to Approve Signer ↗
-                      </a>
+                  <div className="flex flex-col gap-2 mt-2 p-4 bg-white/5 border border-white/10 rounded-xl">
+                      <p className="text-xs text-gray-400 text-center">Tap "Authenticate Now" above. If it fails:</p>
                       
-                      <div className="h-px bg-white/10 w-full my-1"></div>
-                      
-                      <p className="text-xs text-yellow-200 text-center">2. Then tap this button:</p>
-                      <button onClick={() => pendingSignerUuid && checkSignerStatus(pendingSignerUuid)} className="w-full bg-green-700 hover:bg-green-600 text-white font-bold py-2 rounded-lg text-sm">
-                         I Have Approved It ✅
-                      </button>
+                      <div className="flex gap-2">
+                         <button onClick={copyLink} className="flex-1 bg-gray-800 text-xs py-2 rounded text-gray-300 flex items-center justify-center">
+                            <CopyIcon /> Copy Link
+                         </button>
+                         <button onClick={() => pendingSignerUuid && checkSignerStatus(pendingSignerUuid)} className="flex-1 bg-green-800 hover:bg-green-700 text-xs py-2 rounded text-white font-bold">
+                            I Approved It ✅
+                         </button>
+                      </div>
                   </div>
               )}
             </div>
             
-            {/* Scheduler UI ... */}
             <div className="pt-4 border-t border-white/10 space-y-3">
               {!isScheduled ? (
                 <div className="flex gap-2 items-center">
@@ -241,7 +268,7 @@ function CastKeeperApp() {
       </div>
       
       {status && (
-        <div className={"text-center p-2 rounded fixed bottom-4 left-4 right-4 z-50 shadow-xl " + (status.type === 'error' ? 'bg-red-900 text-white' : status.type === 'success' ? 'bg-green-900 text-white' : 'bg-gray-800 text-white')}>
+        <div className={"text-center p-2 rounded fixed bottom-4 left-4 right-4 z-50 shadow-xl backdrop-blur-md " + (status.type === 'error' ? 'bg-red-900/90 text-white' : status.type === 'success' ? 'bg-green-900/90 text-white' : 'bg-gray-800/90 text-white')}>
           {status.msg}
         </div>
       )}
