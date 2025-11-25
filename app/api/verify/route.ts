@@ -3,25 +3,28 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { message, signature } = await req.json();
+    // 1. Get the data from the request
+    const { message, signature, domain, nonce } = await req.json();
 
-    // 1. Verify using the new signature format (message, signature)
-    const { valid, fid } = await verifySignInMessage(message, signature);
+    // 2. Verify using the correct OBJECT format
+    const result = await verifySignInMessage({
+      message,
+      signature,
+      domain,
+      nonce,
+    });
 
-    if (!valid) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    // 3. Use 'success' (not 'valid') to check the result
+    if (!result.success) {
+      return NextResponse.json({ error: 'Invalid signature', details: result.error }, { status: 401 });
     }
 
-    // 2. Optional: extra domain check (recommended)
-    const domain = new URL(req.headers.get('origin') || '').hostname;
-    if (message.includes(domain)) {
-      // (Optional logic: You can enforce domain matching here if needed)
-    }
+    // 4. Success! Return the FID
+    return NextResponse.json({ 
+      token: "session-" + result.fid, 
+      fid: result.fid 
+    });
 
-    // 3. Create your session
-    const token = "dummy-jwt-for-fid-" + fid; 
-
-    return NextResponse.json({ token, fid });
   } catch (error) {
     console.error('Verify error:', error);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
