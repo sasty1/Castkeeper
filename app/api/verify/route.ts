@@ -4,23 +4,22 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     // 1. Get the data from the request
-    const { message, signature, domain, nonce } = await req.json();
+    const body = await req.json();
+    
+    console.log('Received sign-in data:', body);
 
-    // 2. Verify using the NEW API format (requires domain as second param)
-    const result = await verifySignInMessage(
-      {
-        message,
-        signature,
-        nonce,
-      },
-      {
-        domain,
-      }
-    );
+    // 2. Verify using the LATEST API format
+    // The first param is the full message object, second is options with domain
+    const result = await verifySignInMessage(body, { domain: body.domain });
 
-    // 3. Use 'success' (not 'valid') to check the result
+    console.log('Verification result:', result);
+
+    // 3. Check if verification was successful
     if (!result.success) {
-      return NextResponse.json({ error: 'Invalid signature', details: result.error }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Invalid signature', 
+        details: result.error 
+      }, { status: 401 });
     }
 
     // 4. Success! Return the FID
@@ -29,8 +28,11 @@ export async function POST(req: Request) {
       fid: result.fid 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Verify error:', error);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Server error', 
+      details: error.message 
+    }, { status: 500 });
   }
 }
