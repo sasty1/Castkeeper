@@ -8,9 +8,13 @@ export async function POST(req: Request) {
     
     console.log('Received sign-in data:', body);
 
-    // 2. Verify using the LATEST API format
-    // The first param is the full message object, second is options with domain
-    const result = await verifySignInMessage(body, { domain: body.domain });
+    // 2. Verify - the function expects { nonce, message, signature, domain }
+    const result = await verifySignInMessage({
+      nonce: body.nonce,
+      message: body.message,
+      signature: body.signature,
+      domain: body.domain
+    });
 
     console.log('Verification result:', result);
 
