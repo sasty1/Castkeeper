@@ -74,8 +74,8 @@ function CastKeeperApp() {
           body: JSON.stringify({
             message: result.message,
             signature: result.signature,
-            domain: result.domain || window.location.host,
-            nonce: result.nonce || nonce,
+            domain: window.location.host,
+            nonce: nonce,
           }),
         });
         
