@@ -1,5 +1,9 @@
-import { verifySignInMessage } from '@farcaster/auth-client';
+import { createAppClient, viemConnector } from '@farcaster/auth-client';
 import { NextResponse } from 'next/server';
+
+const appClient = createAppClient({
+  ethereum: viemConnector(),
+});
 
 export async function POST(req: Request) {
   try {
@@ -8,12 +12,12 @@ export async function POST(req: Request) {
     
     console.log('Received sign-in data:', body);
 
-    // 2. Verify with the raw data
-    const result = await verifySignInMessage({
+    // 2. Verify with appClient (single object with all fields)
+    const result = await appClient.verifySignInMessage({
+      nonce: body.nonce,
+      domain: body.domain,
       message: body.message,
       signature: body.signature,
-      domain: body.domain,
-      nonce: body.nonce
     });
 
     console.log('Verification result:', result);
