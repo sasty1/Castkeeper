@@ -46,42 +46,73 @@ function CastKeeperApp() {
     loadContext();
   }, []);
 
-  // --- 3. YOUR EXACT REQUESTED SIGN-IN HANDLER ---
+  // --- 3. FIXED SIGN-IN HANDLER ---
   const handleSignIn = async () => {
     try {
       setLoading(true);
       setStatus({ msg: 'Requesting signature...', type: 'neutral' });
       console.log('Requesting signature...');
       
-      const result = await sdk.actions.signIn(); // ← NATIVE ACTION (No Crash)
+      // Step 1: Get a nonce from the server
+      const nonceRes = await fetch('/api/auth/nonce');
+      if (!nonceRes.ok) {
+        throw new Error('Failed to get nonce');
+      }
+      const { nonce } = await nonceRes.json();
+      
+      // Step 2: Request sign-in with the nonce
+      const result = await sdk.actions.signIn({ nonce });
       
       if (result) {
         setStatus({ msg: 'Verifying...', type: 'neutral' });
+        console.log('Sign-in result:', result);
         
-        // Send to your backend to verify
+        // Step 3: Send to your backend to verify
         const res = await fetch('/api/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(result),
+          body: JSON.stringify({
+            message: result.message,
+            signature: result.signature,
+            domain: result.domain || window.location.host,
+            nonce: result.nonce || nonce,
+          }),
         });
         
         if (res.ok) {
           const data = await res.json();
-          // We assume for now this successfully logs them in.
-          // Note: To post, we might still need the Neynar Signer, 
-          // but this solves the Authentication crash.
+          console.log('Verification success:', data);
+          
+          // Save user data
+          if (data.fid) {
+            setFrameUser({ 
+              fid: data.fid, 
+              username: result.username || `user${data.fid}`,
+              pfp: result.pfpUrl 
+            });
+            
+            // Save to localStorage
+            localStorage.setItem('fid', data.fid.toString());
+            localStorage.setItem('auth_token', data.token);
+          }
+          
           setStatus({ msg: 'Signed in successfully!', type: 'success' });
+          
+          // Clear status after 2 seconds
+          setTimeout(() => setStatus(null), 2000);
         } else {
-           setStatus({ msg: 'Verification failed', type: 'error' });
+          const errorData = await res.json();
+          console.error('Verification failed:', errorData);
+          setStatus({ msg: 'Verification failed: ' + (errorData.error || 'Unknown error'), type: 'error' });
         }
       }
     } catch (err: any) {
       console.error('Sign-in error:', err);
       // This catch PREVENTS the mini app from closing
-      if (err?.message?.includes('cancelled')) {
+      if (err?.message?.includes('cancelled') || err?.message?.includes('rejected')) {
         setStatus({ msg: 'You cancelled sign-in', type: 'error' });
       } else {
-        setStatus({ msg: 'Sign-in failed – retry', type: 'error' });
+        setStatus({ msg: 'Sign-in failed: ' + (err.message || 'Unknown error'), type: 'error' });
       }
     } finally {
       setLoading(false);
