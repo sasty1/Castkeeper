@@ -87,8 +87,8 @@ function CastKeeperApp() {
           if (data.fid) {
             setFrameUser({ 
               fid: data.fid, 
-              username: result.username || `user${data.fid}`,
-              pfp: result.pfpUrl 
+              username: (result as any).username || `user${data.fid}`,
+              pfp: (result as any).pfpUrl 
             });
             
             // Save to localStorage
