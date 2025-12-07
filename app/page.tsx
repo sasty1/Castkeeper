@@ -192,13 +192,19 @@ function CastKeeperApp() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 text-white">
         <h1 className="text-3xl font-bold mb-4">CastKeeper</h1>
-        {/* NEW NATIVE SIGN IN BUTTON */}
-        <button 
-          onClick={handleSignIn}
-          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto"
+        <p className="text-gray-400 mb-6">Schedule your Farcaster posts</p>
+        
+        {/* FOR LOCAL TESTING: Use Neynar login page */}
+        <a 
+          href="/login"
+          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto no-underline"
         >
           <FarcasterIcon /> Sign in with Farcaster
-        </button>
+        </a>
+        
+        <p className="text-xs text-gray-500 mt-4">
+          For Frame: Use handleSignIn • For Web: Use /login
+        </p>
       </div>
     );
   }
