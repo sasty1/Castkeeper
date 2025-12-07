@@ -9,16 +9,16 @@ export async function POST(req: Request) {
     console.log('Received sign-in data:', body);
 
     // 2. Verify - the function expects TWO arguments:
-    // First: { nonce, message, signature }
-    // Second: { domain }
+    // First: { message, signature } (NOT nonce)
+    // Second: { domain, nonce }
     const result = await verifySignInMessage(
       {
-        nonce: body.nonce,
         message: body.message,
         signature: body.signature
       },
       {
-        domain: body.domain
+        domain: body.domain,
+        nonce: body.nonce
       }
     );
 
