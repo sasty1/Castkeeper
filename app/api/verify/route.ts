@@ -6,13 +6,17 @@ export async function POST(req: Request) {
     // 1. Get the data from the request
     const { message, signature, domain, nonce } = await req.json();
 
-    // 2. Verify using the correct OBJECT format
-    const result = await verifySignInMessage({
-      message,
-      signature,
-      domain,
-      nonce,
-    });
+    // 2. Verify using the NEW API format (requires domain as second param)
+    const result = await verifySignInMessage(
+      {
+        message,
+        signature,
+        nonce,
+      },
+      {
+        domain,
+      }
+    );
 
     // 3. Use 'success' (not 'valid') to check the result
     if (!result.success) {
