@@ -52,9 +52,8 @@ function LoginContent() {
   };
 
   const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
-  const redirectUrl = typeof window !== 'undefined' 
-    ? window.location.origin + '/login'
-    : "https://castkeeper-tsf3.vercel.app/login"; 
+  // Use the deployed URL for redirect
+  const redirectUrl = "https://castkeeper-tsf3.vercel.app/login"; 
   
   const authUrl = `https://app.neynar.com/login?client_id=${clientId}&response_type=code&scope=signer_client_write&redirect_uri=${encodeURIComponent(redirectUrl)}&mobile=true&ui_mode=popup&prompt=login`;
 
