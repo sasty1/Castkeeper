@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { NeynarContextProvider, Theme, useNeynarContext, SIWN } from "@neynar/react";
-import { sdk } from '@farcaster/miniapp-sdk';
+import { NeynarContextProvider, Theme, useNeynarContext } from "@neynar/react";
+import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
 // --- ICONS ---
@@ -193,8 +193,12 @@ function CastKeeperApp() {
         <h1 className="text-3xl font-bold">CastKeeper</h1>
         <p className="text-gray-400">Schedule your Farcaster posts</p>
         
-        {/* Use Neynar's built-in Sign In component */}
-        <SIWN />
+        <a 
+          href="/login"
+          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl no-underline"
+        >
+          Sign in with Farcaster
+        </a>
       </div>
     );
   }
