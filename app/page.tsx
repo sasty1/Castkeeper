@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { NeynarContextProvider, Theme, useNeynarContext } from "@neynar/react";
-// 1. Using the specific package you requested
+import { NeynarContextProvider, Theme, useNeynarContext, SIWN } from "@neynar/react";
 import { sdk } from '@farcaster/miniapp-sdk';
 import "@neynar/react/dist/style.css";
 
@@ -190,21 +189,12 @@ function CastKeeperApp() {
   // --- UI RENDER ---
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 text-white">
-        <h1 className="text-3xl font-bold mb-4">CastKeeper</h1>
-        <p className="text-gray-400 mb-6">Schedule your Farcaster posts</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 text-white gap-6">
+        <h1 className="text-3xl font-bold">CastKeeper</h1>
+        <p className="text-gray-400">Schedule your Farcaster posts</p>
         
-        {/* FOR LOCAL TESTING: Use Neynar login page */}
-        <a 
-          href="/login"
-          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto no-underline"
-        >
-          <FarcasterIcon /> Sign in with Farcaster
-        </a>
-        
-        <p className="text-xs text-gray-500 mt-4">
-          For Frame: Use handleSignIn • For Web: Use /login
-        </p>
+        {/* Use Neynar's built-in Sign In component */}
+        <SIWN />
       </div>
     );
   }
