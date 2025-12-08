@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
-  const [isMounted, setIsMounted] = useState(false);
+function LoginContent() {
   const [status, setStatus] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => { 
-    setIsMounted(true);
-    
     // Check if we got a code back from Neynar
     const code = searchParams.get('code');
     if (code) {
@@ -54,8 +51,6 @@ export default function LoginPage() {
     }
   };
 
-  if (!isMounted) return null;
-
   const clientId = process.env.NEXT_PUBLIC_NEYNAR_CLIENT_ID || "";
   const redirectUrl = typeof window !== 'undefined' 
     ? window.location.origin + '/login'
@@ -90,5 +85,13 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-[#0a0a0a] text-white">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
