@@ -186,6 +186,43 @@ function CastKeeperApp() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isScheduled, targetDate, text]);
 
+  // Simple FID-based login
+  const [fidInput, setFidInput] = useState('');
+  const [signerUrl, setSignerUrl] = useState('');
+
+  const handleFidLogin = async () => {
+    if (!fidInput) return;
+    
+    setLoading(true);
+    try {
+      // Create a signer for this FID
+      const res = await fetch('/api/auth/create-signer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fid: parseInt(fidInput) })
+      });
+      
+      const data = await res.json();
+      
+      if (data.signer_approval_url) {
+        setSignerUrl(data.signer_approval_url);
+        setStatus({ msg: 'Scan QR code or click link to approve', type: 'neutral' });
+        
+        // Save signer UUID
+        localStorage.setItem('signer_' + fidInput, data.signer_uuid);
+        localStorage.setItem('fid', fidInput);
+        
+        // Set user
+        setFrameUser({ fid: parseInt(fidInput), username: `user${fidInput}` });
+        setSignerUuid(data.signer_uuid);
+      }
+    } catch (error) {
+      setStatus({ msg: 'Failed to create signer', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- UI RENDER ---
   if (!user) {
     return (
@@ -193,12 +230,39 @@ function CastKeeperApp() {
         <h1 className="text-3xl font-bold">CastKeeper</h1>
         <p className="text-gray-400">Schedule your Farcaster posts</p>
         
-        <a 
-          href="/login"
-          className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl no-underline"
-        >
-          Sign in with Farcaster
-        </a>
+        <div className="flex flex-col gap-4 w-full max-w-md">
+          <input
+            type="number"
+            placeholder="Enter your Farcaster FID"
+            value={fidInput}
+            onChange={(e) => setFidInput(e.target.value)}
+            className="bg-gray-800 text-white px-4 py-3 rounded-xl outline-none border border-gray-700 focus:border-purple-500"
+          />
+          <button
+            onClick={handleFidLogin}
+            disabled={loading || !fidInput}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-xl disabled:opacity-50"
+          >
+            {loading ? 'Creating...' : 'Continue'}
+          </button>
+          
+          {signerUrl && (
+            <a
+              href={signerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-xl no-underline"
+            >
+              Approve Signer
+            </a>
+          )}
+        </div>
+        
+        {status && (
+          <p className={`text-sm ${status.type === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
+            {status.msg}
+          </p>
+        )}
       </div>
     );
   }
