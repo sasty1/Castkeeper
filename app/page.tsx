@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
-// --- ICONS ---
 const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
 const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
@@ -33,8 +32,12 @@ function CastKeeperApp() {
       const context = await sdk.context;
       if (context?.user) {
         setUser(context.user);
+        // Load signer from local storage
         const savedSigner = localStorage.getItem("signer_" + context.user.fid);
-        if (savedSigner) setSignerUuid(savedSigner);
+        if (savedSigner) {
+            console.log("Loaded signer:", savedSigner);
+            setSignerUuid(savedSigner);
+        }
       }
     };
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
@@ -48,22 +51,28 @@ function CastKeeperApp() {
       const result = await sdk.actions.signIn({ nonce });
       const u = (result as any).user;
       setUser(u);
+      
       const savedSigner = localStorage.getItem("signer_" + u.fid);
       if (savedSigner) setSignerUuid(savedSigner);
-      setStatus({msg: 'Signed in successfully!', type: 'success'});
-    } catch (e) { 
-      setStatus({msg: 'Login failed. Try again.', type: 'error'}); 
-    } finally { 
-      setLoading(false); 
-    }
+      
+      setStatus({msg: 'Signed in!', type: 'success'});
+    } catch (e) { setStatus({msg: 'Login failed', type: 'error'}); } 
+    finally { setLoading(false); }
   };
 
   const handleSmartCast = async () => {
-    if (!text) return;
+    if (!text) {
+        alert("Please write something first!");
+        return;
+    }
+
+    // DEBUG: Alert if signer is missing
     if (!signerUuid) {
+      alert("No Posting Permission found. I will open the approval screen now.");
       await requestSigner();
       return;
     }
+
     await handleCastDirectly(text);
   };
 
@@ -76,8 +85,10 @@ function CastKeeperApp() {
       
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
-      // FIX: Use the standard HTTPS link. Android will detect the app intent automatically.
-      const deepLink = data.link;
+      let deepLink = data.link;
+      if (deepLink.startsWith("https://warpcast.com/")) {
+        deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
+      }
 
       setApprovalUrl(deepLink);
       sdk.actions.openUrl(deepLink);
@@ -98,6 +109,7 @@ function CastKeeperApp() {
       }, 2000);
       
     } catch (e: any) {
+      alert("Signer Error: " + e.message); // DEBUG ALERT
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
     }
@@ -163,13 +175,19 @@ function CastKeeperApp() {
         body: JSON.stringify({ castText: textToCast, signerUuid: signerUuid }),
       });
       const data = await response.json();
+      
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
         if(!isScheduled) setText(''); 
       } else {
+        // DEBUG ALERT
+        alert("Cast Failed: " + data.error);
         setStatus({msg: data.error, type: 'error'});
       }
-    } catch (e) { setStatus({msg: 'Network error', type: 'error'}); } 
+    } catch (e: any) { 
+        alert("Network Error: " + e.message);
+        setStatus({msg: 'Network error', type: 'error'}); 
+    } 
     finally { setLoading(false); }
   };
 
@@ -209,6 +227,8 @@ function CastKeeperApp() {
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
              <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
              <div className="flex gap-3 pt-2">
+                
+                {/* UNIFIED BUTTON */}
                 <button 
                   onClick={handleSmartCast} 
                   disabled={loading || !text} 
@@ -244,22 +264,6 @@ function CastKeeperApp() {
             </div>
           </div>
       </div>
-      
-      {/* Drafts List */}
-      {drafts.length > 0 && (
-        <div className="space-y-3 pt-2">
-          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
-            {drafts.map((draft: any) => (
-              <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
-                <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {status && <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap">{status.msg}</div>}
     </div>
   );
