@@ -9,7 +9,6 @@ const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="current
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.5 15.5a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077l4.774-4.566A6 6 0 0115 7zm0 2a2 2 0 100-4 2 2 0 000 4z" /></svg>;
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
@@ -26,23 +25,21 @@ function CastKeeperApp() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
 
+  // --- 1. INITIALIZE SDK ---
   useEffect(() => {
     const load = async () => { 
       sdk.actions.ready(); 
       const context = await sdk.context;
       if (context?.user) {
         setUser(context.user);
-        // Load signer from local storage
         const savedSigner = localStorage.getItem("signer_" + context.user.fid);
-        if (savedSigner) {
-            console.log("Loaded signer:", savedSigner);
-            setSignerUuid(savedSigner);
-        }
+        if (savedSigner) setSignerUuid(savedSigner);
       }
     };
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // --- 2. NATIVE LOGIN (READ ONLY) ---
   const handleNativeLogin = async () => {
     setLoading(true);
     try {
@@ -56,26 +53,20 @@ function CastKeeperApp() {
       if (savedSigner) setSignerUuid(savedSigner);
       
       setStatus({msg: 'Signed in!', type: 'success'});
-    } catch (e) { setStatus({msg: 'Login failed', type: 'error'}); } 
-    finally { setLoading(false); }
+    } catch (e) { 
+      setStatus({msg: 'Login failed. Try again.', type: 'error'}); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSmartCast = async () => {
-    if (!text) {
-        alert("Please write something first!");
-        return;
-    }
-
-    // DEBUG: Alert if signer is missing
-    if (!signerUuid) {
-      alert("No Posting Permission found. I will open the approval screen now.");
-      await requestSigner();
-      return;
-    }
-
+    if (!text) { alert("Please enter text first!"); return; }
+    if (!signerUuid) { await requestSigner(); return; }
     await handleCastDirectly(text);
   };
 
+  // --- 3. REQUEST POSTING PERMISSION (WRITE ACCESS) ---
   const requestSigner = async () => {
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
@@ -85,14 +76,29 @@ function CastKeeperApp() {
       
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
+      // *** THE ANDROID DEEP LINK FIX ***
+      // We manually construct the warpcast:// link using the public_key.
+      // This is safer than relying on the HTTP link from the API.
+      // Format: warpcast://add-signer?public_key=0x...&name=CastKeeper
       let deepLink = data.link;
-      if (deepLink.startsWith("https://warpcast.com/")) {
-        deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
+      if (data.public_key || (data.signer_approval_url && data.signer_approval_url.includes('public_key='))) {
+         // Extract public key or use the one provided
+         let pk = data.public_key;
+         if(!pk && data.signer_approval_url) {
+            pk = data.signer_approval_url.split('public_key=')[1].split('&')[0];
+         }
+         deepLink = "warpcast://add-signer?public_key=" + pk + "&name=CastKeeper";
+      } else if (deepLink && deepLink.startsWith("https://warpcast.com/")) {
+         deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
       }
 
+      console.log("Forcing Deep Link:", deepLink);
       setApprovalUrl(deepLink);
+      
+      // Try auto-open
       sdk.actions.openUrl(deepLink);
       
+      // Poll for completion
       const checkStatus = setInterval(async () => {
         try {
             const poll = await fetch("/api/connect?signerUuid=" + data.signerUuid);
@@ -109,7 +115,7 @@ function CastKeeperApp() {
       }, 2000);
       
     } catch (e: any) {
-      alert("Signer Error: " + e.message); // DEBUG ALERT
+      alert("Error: " + e.message);
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
     }
@@ -175,18 +181,16 @@ function CastKeeperApp() {
         body: JSON.stringify({ castText: textToCast, signerUuid: signerUuid }),
       });
       const data = await response.json();
-      
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
         if(!isScheduled) setText(''); 
       } else {
-        // DEBUG ALERT
-        alert("Cast Failed: " + data.error);
         setStatus({msg: data.error, type: 'error'});
+        alert("Post Failed: " + data.error);
       }
     } catch (e: any) { 
+        setStatus({msg: 'Network error', type: 'error'});
         alert("Network Error: " + e.message);
-        setStatus({msg: 'Network error', type: 'error'}); 
     } 
     finally { setLoading(false); }
   };
@@ -227,8 +231,6 @@ function CastKeeperApp() {
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
              <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
              <div className="flex gap-3 pt-2">
-                
-                {/* UNIFIED BUTTON */}
                 <button 
                   onClick={handleSmartCast} 
                   disabled={loading || !text} 
@@ -264,6 +266,22 @@ function CastKeeperApp() {
             </div>
           </div>
       </div>
+      
+      {/* Drafts List */}
+      {drafts.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
+          <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+            {drafts.map((draft: any) => (
+              <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
+                <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
+                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {status && <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap">{status.msg}</div>}
     </div>
   );
