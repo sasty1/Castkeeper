@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import sdk from '@farcaster/frame-sdk';
+import { useMiniApp } from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
 const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
@@ -12,6 +12,7 @@ const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="curren
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
+  const { sdk, context } = useMiniApp();
   const [user, setUser] = useState<any>(null);
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -27,36 +28,39 @@ function CastKeeperApp() {
 
   // --- 1. INITIALIZE SDK ---
   useEffect(() => {
-    const load = async () => { 
-      sdk.actions.ready(); 
-      const context = await sdk.context;
-      if (context?.user) {
-        setUser(context.user);
-        const savedSigner = localStorage.getItem("signer_" + context.user.fid);
-        if (savedSigner) setSignerUuid(savedSigner);
-      }
-    };
-    if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
-  }, [isSDKLoaded]);
+    if (context?.user) {
+      setUser(context.user);
+      const savedSigner = localStorage.getItem("signer_" + context.user.fid);
+      if (savedSigner) setSignerUuid(savedSigner);
+      setIsSDKLoaded(true);
+    }
+  }, [context]);
 
   // --- 2. NATIVE LOGIN (READ ONLY) ---
   const handleNativeLogin = async () => {
+    if (!sdk) {
+      alert("SDK not ready. Please wait.");
+      return;
+    }
+    
     setLoading(true);
     try {
       const nonceRes = await fetch('/api/auth/nonce');
       const { nonce } = await nonceRes.json();
+      
       const result = await sdk.actions.signIn({ nonce });
       const u = (result as any).user;
       setUser(u);
-      
+
       const savedSigner = localStorage.getItem("signer_" + u.fid);
       if (savedSigner) setSignerUuid(savedSigner);
-      
+
       setStatus({msg: 'Signed in!', type: 'success'});
-    } catch (e) { 
-      setStatus({msg: 'Login failed. Try again.', type: 'error'}); 
-    } finally { 
-      setLoading(false); 
+    } catch (e: any) {
+      console.error('Login error:', e);
+      setStatus({msg: 'Login failed. Try again.', type: 'error'});
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -66,65 +70,90 @@ function CastKeeperApp() {
     await handleCastDirectly(text);
   };
 
-  // --- 3. REQUEST POSTING PERMISSION (WRITE ACCESS) ---
+  // --- 3. REQUEST POSTING PERMISSION (FIXED VERSION) ---
   const requestSigner = async () => {
+    if (!sdk) {
+      alert("SDK not ready");
+      return;
+    }
+
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
+    
     try {
-      const res = await fetch('/api/connect', { method: 'POST' });
-      const data = await res.json();
-      
-      if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
-      
-      // *** THE ANDROID DEEP LINK FIX ***
-      // We manually construct the warpcast:// link using the public_key.
-      // This is safer than relying on the HTTP link from the API.
-      // Format: warpcast://add-signer?public_key=0x...&name=CastKeeper
-      let deepLink = data.link;
-      if (data.public_key || (data.signer_approval_url && data.signer_approval_url.includes('public_key='))) {
-         // Extract public key or use the one provided
-         let pk = data.public_key;
-         if(!pk && data.signer_approval_url) {
-            pk = data.signer_approval_url.split('public_key=')[1].split('&')[0];
-         }
-         deepLink = "warpcast://add-signer?public_key=" + pk + "&name=CastKeeper";
-      } else if (deepLink && deepLink.startsWith("https://warpcast.com/")) {
-         deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
-      }
+      console.log('Step 1: Creating signer...');
+      const signerRes = await fetch('/api/auth/signer', {
+        method: 'POST',
+      });
+      const signer = await signerRes.json();
+      console.log('✅ Signer created:', signer.signer_uuid);
 
-      console.log("Forcing Deep Link:", deepLink);
-      setApprovalUrl(deepLink);
-      
-      // Try auto-open
-      sdk.actions.openUrl(deepLink);
-      
-      // Poll for completion
+      console.log('Step 2: Registering signed key...');
+      const signedKeyRes = await fetch('/api/auth/signer/signed_key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          signerUuid: signer.signer_uuid,
+          publicKey: signer.public_key,
+        }),
+      });
+      const signedKeyData = await signedKeyRes.json();
+      console.log('✅ Signed key registered');
+
+      const url = signedKeyData.signer_approval_url;
+      setApprovalUrl(url);
+
+      // Open Warpcast for approval
+      console.log('Step 3: Opening Warpcast...');
+      await sdk.actions.openUrl(url);
+      console.log('✅ Warpcast opened');
+
+      // Start polling for approval
+      console.log('Step 4: Polling for approval...');
       const checkStatus = setInterval(async () => {
         try {
-            const poll = await fetch("/api/connect?signerUuid=" + data.signerUuid);
-            const statusData = await poll.json();
-            if (statusData.status === 'approved') {
-              clearInterval(checkStatus);
-              setSignerUuid(data.signerUuid);
-              localStorage.setItem("signer_" + user.fid, data.signerUuid);
-              setStatus({msg: 'Approved! Click Cast again.', type: 'success'});
-              setLoading(false);
-              setApprovalUrl(null);
-            }
-        } catch(ignored) {}
+          const pollRes = await fetch(`/api/auth/signer?signerUuid=${signer.signer_uuid}`);
+          const statusData = await pollRes.json();
+          
+          console.log('Polling... Status:', statusData.status);
+
+          if (statusData.status === 'approved') {
+            clearInterval(checkStatus);
+            console.log('🎉 Signer approved!');
+            
+            setSignerUuid(signer.signer_uuid);
+            localStorage.setItem("signer_" + user.fid, signer.signer_uuid);
+            setStatus({msg: 'Approved! Click Cast again.', type: 'success'});
+            setLoading(false);
+            setApprovalUrl(null);
+          }
+        } catch (err) {
+          console.error('Polling error:', err);
+        }
       }, 2000);
-      
+
+      // Stop polling after 5 minutes
+      setTimeout(() => {
+        clearInterval(checkStatus);
+        if (loading) {
+          setLoading(false);
+          setStatus({msg: 'Approval timeout. Try again.', type: 'error'});
+        }
+      }, 300000);
+
     } catch (e: any) {
+      console.error('Signer request error:', e);
       alert("Error: " + e.message);
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
+      setApprovalUrl(null);
     }
   };
 
-  // ... (Drafts/Scheduler logic)
+  // ... Drafts/Scheduler logic
   useEffect(() => {
     if (user?.fid) {
-      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
+      const savedDrafts = localStorage.getItem("drafts_" + user.fid);
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
     }
   }, [user?.fid]);
@@ -136,7 +165,8 @@ function CastKeeperApp() {
       const target = new Date(targetDate).getTime();
       const diff = target - now;
       if (diff <= 0) {
-        handleCastDirectly(text); resetSchedule();
+        handleCastDirectly(text); 
+        resetSchedule();
       } else {
         const seconds = Math.floor((diff / 1000) % 60);
         const minutes = Math.floor((diff / 1000 / 60) % 60);
@@ -183,16 +213,24 @@ function CastKeeperApp() {
       const data = await response.json();
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
-        if(!isScheduled) setText(''); 
+        if(!isScheduled) setText('');
       } else {
         setStatus({msg: data.error, type: 'error'});
         alert("Post Failed: " + data.error);
       }
-    } catch (e: any) { 
+    } catch (e: any) {
         setStatus({msg: 'Network error', type: 'error'});
         alert("Network Error: " + e.message);
-    } 
+    }
     finally { setLoading(false); }
+  };
+
+  // Manual approval button handler
+  const openApprovalManually = async () => {
+    if (approvalUrl && sdk) {
+      console.log('Manually opening approval URL...');
+      await sdk.actions.openUrl(approvalUrl);
+    }
   };
 
   if (!user) {
@@ -208,9 +246,10 @@ function CastKeeperApp() {
             </p>
           </div>
           <div className="w-full px-2 flex justify-center">
-             <button 
+             <button
                onClick={handleNativeLogin}
-               className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+               disabled={loading}
+               className="w-full bg-[#5E5CE6] hover:bg-[#4d4bbd] text-white font-semibold py-4 rounded-2xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
              >
                <FarcasterIcon />
                {loading ? 'Connecting...' : 'Sign In with Farcaster'}
@@ -225,25 +264,39 @@ function CastKeeperApp() {
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         <button onClick={() => { setUser(null); }} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20">Sign Out</button>
+         <button onClick={() => { setUser(null); setSignerUuid(null); }} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20">Sign Out</button>
       </div>
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
-             <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
+             <textarea 
+               className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" 
+               placeholder="What's happening?" 
+               value={text} 
+               onChange={(e) => setText(e.target.value)} 
+             />
              <div className="flex gap-3 pt-2">
-                <button 
-                  onClick={handleSmartCast} 
-                  disabled={loading || !text} 
-                  className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all"
+                <button
+                  onClick={handleSmartCast}
+                  disabled={loading || !text}
+                  className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (signerUuid ? 'Casting...' : 'Waiting for approval...') : <><SendIcon /> Cast Now</>}
                 </button>
 
-                <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
+                <button 
+                  onClick={saveDraft} 
+                  disabled={!text} 
+                  className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <SaveIcon />
+                </button>
              </div>
-             
+
              {loading && approvalUrl && !signerUuid && (
-                <button onClick={() => sdk.actions.openUrl(approvalUrl)} className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center py-2">
+                <button 
+                  onClick={openApprovalManually} 
+                  className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center py-2"
+                >
                   <LinkIcon /> Tap here if approval screen didn't open
                 </button>
              )}
@@ -253,36 +306,75 @@ function CastKeeperApp() {
                 <div className="flex gap-2 items-center">
                   <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
-                    <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
+                    <input 
+                      type="datetime-local" 
+                      className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" 
+                      value={targetDate} 
+                      onChange={(e) => setTargetDate(e.target.value)} 
+                    />
                   </div>
-                  <button onClick={startSchedule} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Schedule</button>
+                  <button 
+                    onClick={startSchedule} 
+                    className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors"
+                  >
+                    Schedule
+                  </button>
                 </div>
               ) : (
                 <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
-                  <div className="flex items-center text-purple-200 font-mono"><ClockIcon /> <span className="font-bold tracking-wider">{timeLeft}</span></div>
-                  <button onClick={resetSchedule} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20">Cancel</button>
+                  <div className="flex items-center text-purple-200 font-mono">
+                    <ClockIcon /> 
+                    <span className="font-bold tracking-wider">{timeLeft}</span>
+                  </div>
+                  <button 
+                    onClick={resetSchedule} 
+                    className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20"
+                  >
+                    Cancel
+                  </button>
                 </div>
               )}
             </div>
           </div>
       </div>
-      
+
       {/* Drafts List */}
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
           <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
             {drafts.map((draft: any) => (
-              <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
-                <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
+              <div 
+                key={draft.id} 
+                onClick={() => setText(draft.text)} 
+                className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all"
+              >
+                <div className="overflow-hidden">
+                  <p className="text-gray-300 text-sm truncate">{draft.text}</p>
+                  <p className="text-gray-600 text-xs mt-1">{draft.date}</p>
+                </div>
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    const newDrafts = drafts.filter((d: any) => d.id !== draft.id); 
+                    setDrafts(newDrafts); 
+                    localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); 
+                  }} 
+                  className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <TrashIcon />
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {status && <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap">{status.msg}</div>}
+      {status && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap z-50 shadow-lg">
+          {status.msg}
+        </div>
+      )}
     </div>
   );
 }
@@ -296,4 +388,3 @@ export default function Home() {
     </main>
   );
 }
-

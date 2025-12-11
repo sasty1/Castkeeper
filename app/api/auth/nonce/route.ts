@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { NeynarAPIClient } from '@neynar/nodejs-sdk';
+
+const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY!);
 
 export async function GET() {
-  // In a real app, save this to a database. 
-  // For now, we generate a simple random string to allow the UI to work.
-  const nonce = Math.random().toString(36).substring(7);
-  return NextResponse.json({ nonce });
+  try {
+    const response = await client.fetchNonce();
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('Error fetching nonce:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch nonce' },
+      { status: 500 }
+    );
+  }
 }
