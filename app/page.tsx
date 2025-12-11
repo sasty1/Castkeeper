@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef } from 'react';
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
@@ -25,6 +27,7 @@ function CastKeeperApp() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
 
+  // --- 1. INITIALIZE SDK ---
   useEffect(() => {
     const load = async () => { 
       sdk.actions.ready(); 
@@ -38,6 +41,7 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // --- 2. NATIVE LOGIN ---
   const handleNativeLogin = async () => {
     setLoading(true);
     try {
@@ -48,11 +52,15 @@ function CastKeeperApp() {
       setUser(u);
       const savedSigner = localStorage.getItem("signer_" + u.fid);
       if (savedSigner) setSignerUuid(savedSigner);
-      setStatus({msg: 'Signed in!', type: 'success'});
-    } catch (e) { setStatus({msg: 'Login failed', type: 'error'}); } 
-    finally { setLoading(false); }
+      setStatus({msg: 'Signed in successfully!', type: 'success'});
+    } catch (e) { 
+      setStatus({msg: 'Login failed. Try again.', type: 'error'}); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
+  // --- 3. REQUEST POSTING PERMISSION ---
   const requestSigner = async () => {
     setLoading(true);
     try {
@@ -90,6 +98,7 @@ function CastKeeperApp() {
     }
   };
 
+  // --- DRAFTS & SCHEDULER ---
   useEffect(() => {
     if (user?.fid) {
       const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
@@ -198,68 +207,4 @@ function CastKeeperApp() {
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
              <textarea className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" placeholder="What's happening?" value={text} onChange={(e) => setText(e.target.value)} />
-             <div className="flex gap-3 pt-2">
-                {!signerUuid ? (
-                  <div className="flex-1 flex flex-col gap-2">
-                    <button onClick={requestSigner} disabled={loading} className="w-full flex items-center justify-center py-3 rounded-xl font-bold bg-yellow-600 hover:bg-yellow-500 text-white transition-all">
-                      {loading ? 'Waiting...' : <><KeyIcon /> Enable Posting</>}
-                    </button>
-                    {loading && approvalUrl && (
-                      <button onClick={() => sdk.actions.openUrl(approvalUrl)} className="w-full text-xs text-yellow-400 hover:text-yellow-300 underline flex items-center justify-center py-2">
-                        <LinkIcon /> Tap here if approval screen didn't open
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <button onClick={() => handleCastDirectly(text)} disabled={loading || !text} className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all">
-                    {loading ? 'Casting...' : <><SendIcon /> Cast Now</>}
-                  </button>
-                )}
-                <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
-             </div>
-             <div className="pt-4 border-t border-white/10 space-y-3">
-              {!isScheduled ? (
-                <div className="flex gap-2 items-center">
-                  <div className="relative flex-1">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
-                    <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
-                  </div>
-                  <button onClick={startSchedule} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Schedule</button>
-                </div>
-              ) : (
-                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
-                  <div className="flex items-center text-purple-200 font-mono"><ClockIcon /> <span className="font-bold tracking-wider">{timeLeft}</span></div>
-                  <button onClick={resetSchedule} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20">Cancel</button>
-                </div>
-              )}
-            </div>
-          </div>
-      </div>
-      {drafts.length > 0 && (
-        <div className="space-y-3 pt-2">
-          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
-            {drafts.map((draft: any) => (
-              <div key={draft.id} onClick={() => setText(draft.text)} className="group flex justify-between items-center p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-xl cursor-pointer transition-all">
-                <div className="overflow-hidden"><p className="text-gray-300 text-sm truncate">{draft.text}</p><p className="text-gray-600 text-xs mt-1">{draft.date}</p></div>
-                <button onClick={(e) => { e.stopPropagation(); const newDrafts = drafts.filter((d: any) => d.id !== draft.id); setDrafts(newDrafts); localStorage.setItem("drafts_" + user.fid, JSON.stringify(newDrafts)); }} className="text-gray-600 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {status && <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap">{status.msg}</div>}
-    </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 overflow-hidden relative">
-       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
-       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
-       <CastKeeperApp />
-    </main>
-  );
-}
-EOF
+             <div className="flex gap-
