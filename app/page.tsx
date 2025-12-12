@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { useMiniApp } from '@farcaster/frame-sdk';
+import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
 const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
@@ -12,7 +12,6 @@ const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="curren
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
-  const { sdk, context } = useMiniApp();
   const [user, setUser] = useState<any>(null);
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
   const [text, setText] = useState('');
@@ -28,21 +27,23 @@ function CastKeeperApp() {
 
   // --- 1. INITIALIZE SDK ---
   useEffect(() => {
-    if (context?.user) {
-      setUser(context.user);
-      const savedSigner = localStorage.getItem("signer_" + context.user.fid);
-      if (savedSigner) setSignerUuid(savedSigner);
+    const load = async () => {
+      sdk.actions.ready();
+      const context = await sdk.context;
+      if (context?.user) {
+        setUser(context.user);
+        const savedSigner = localStorage.getItem("signer_" + context.user.fid);
+        if (savedSigner) setSignerUuid(savedSigner);
+      }
       setIsSDKLoaded(true);
+    };
+    if (sdk && !isSDKLoaded) { 
+      load(); 
     }
-  }, [context]);
+  }, [isSDKLoaded]);
 
   // --- 2. NATIVE LOGIN (READ ONLY) ---
   const handleNativeLogin = async () => {
-    if (!sdk) {
-      alert("SDK not ready. Please wait.");
-      return;
-    }
-    
     setLoading(true);
     try {
       const nonceRes = await fetch('/api/auth/nonce');
@@ -72,11 +73,6 @@ function CastKeeperApp() {
 
   // --- 3. REQUEST POSTING PERMISSION (FIXED VERSION) ---
   const requestSigner = async () => {
-    if (!sdk) {
-      alert("SDK not ready");
-      return;
-    }
-
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
     
@@ -98,14 +94,14 @@ function CastKeeperApp() {
         }),
       });
       const signedKeyData = await signedKeyRes.json();
-      console.log('✅ Signed key registered');
+      console.log('✅ Signed key registered:', signedKeyData);
 
       const url = signedKeyData.signer_approval_url;
       setApprovalUrl(url);
 
       // Open Warpcast for approval
       console.log('Step 3: Opening Warpcast...');
-      await sdk.actions.openUrl(url);
+      sdk.actions.openUrl(url);
       console.log('✅ Warpcast opened');
 
       // Start polling for approval
@@ -226,10 +222,10 @@ function CastKeeperApp() {
   };
 
   // Manual approval button handler
-  const openApprovalManually = async () => {
-    if (approvalUrl && sdk) {
+  const openApprovalManually = () => {
+    if (approvalUrl) {
       console.log('Manually opening approval URL...');
-      await sdk.actions.openUrl(approvalUrl);
+      sdk.actions.openUrl(approvalUrl);
     }
   };
 
