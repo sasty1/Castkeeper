@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY!);
-
 export async function POST() {
   try {
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
+    });
     const signer = await client.createSigner();
     return NextResponse.json(signer);
   } catch (error) {
@@ -28,6 +29,9 @@ export async function GET(request: Request) {
   }
 
   try {
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
+    });
     const signer = await client.lookupSigner({ signerUuid });
     return NextResponse.json(signer);
   } catch (error) {

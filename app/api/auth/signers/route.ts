@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY!);
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const message = searchParams.get('message');
@@ -16,6 +14,9 @@ export async function GET(request: Request) {
   }
 
   try {
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
+    });
     const data = await client.fetchSigners({ 
       message, 
       signature 

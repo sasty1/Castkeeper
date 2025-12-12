@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 import { mnemonicToAccount } from 'viem/accounts';
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY!);
-
 const SIGNED_KEY_REQUEST_VALIDATOR_EIP_712_DOMAIN = {
   name: 'Farcaster SignedKeyRequestValidator',
   version: '1',
@@ -38,6 +36,10 @@ export async function POST(request: Request) {
     }
 
     const account = mnemonicToAccount(seedPhrase);
+
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
+    });
 
     const { user } = await client.lookupUserByCustodyAddress({
       custodyAddress: account.address,

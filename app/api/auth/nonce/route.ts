@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 
-const client = new NeynarAPIClient(process.env.NEYNAR_API_KEY!);
-
 export async function GET() {
   try {
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
+    });
     const response = await client.fetchNonce();
     return NextResponse.json(response);
   } catch (error) {
