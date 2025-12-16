@@ -1,12 +1,32 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { sql } from '@vercel/postgres';
 
-const DATA_FILE = path.join(process.cwd(), 'data', 'scheduled-posts.json');
+// Initialize database table (runs once)
+async function initDB() {
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS scheduled_posts (
+        id TEXT PRIMARY KEY,
+        fid INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        scheduled_time TIMESTAMP NOT NULL,
+        signer_uuid TEXT NOT NULL,
+        channel_id TEXT,
+        embeds JSONB,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `;
+  } catch (error) {
+    console.error('DB init error:', error);
+  }
+}
 
-// Get scheduled posts for a user
+// GET - Fetch scheduled posts for a user
 export async function GET(request: Request) {
   try {
+    await initDB();
+    
     const { searchParams } = new URL(request.url);
     const fid = searchParams.get('fid');
 
@@ -14,23 +34,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    const posts = JSON.parse(data);
-    
-    const userPosts = posts.filter((p: any) => 
-      p.fid === parseInt(fid) && p.status === 'pending'
-    );
+    const { rows } = await sql`
+      SELECT * FROM scheduled_posts 
+      WHERE fid = ${parseInt(fid)} AND status = 'pending'
+      ORDER BY scheduled_time ASC
+    `;
 
-    return NextResponse.json({ posts: userPosts });
+    return NextResponse.json({ posts: rows });
   } catch (error) {
-    console.error('Error reading scheduled posts:', error);
+    console.error('Error fetching scheduled posts:', error);
     return NextResponse.json({ posts: [] });
   }
 }
 
-// Create a scheduled post
+// POST - Create a scheduled post
 export async function POST(request: Request) {
   try {
+    await initDB();
+    
     const body = await request.json();
     const { fid, text, scheduledTime, signerUuid, channelId, embeds } = body;
 
@@ -41,30 +62,28 @@ export async function POST(request: Request) {
       );
     }
 
-    let posts = [];
-    try {
-      const data = await fs.readFile(DATA_FILE, 'utf8');
-      posts = JSON.parse(data);
-    } catch {
-      posts = [];
-    }
+    const id = Date.now().toString();
+    
+    await sql`
+      INSERT INTO scheduled_posts 
+      (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status)
+      VALUES (
+        ${id}, 
+        ${parseInt(fid)}, 
+        ${text}, 
+        ${scheduledTime}, 
+        ${signerUuid},
+        ${channelId || null},
+        ${JSON.stringify(embeds || [])},
+        'pending'
+      )
+    `;
 
-    const newPost = {
-      id: Date.now().toString(),
-      fid: parseInt(fid),
-      text,
-      scheduledTime: new Date(scheduledTime).toISOString(),
-      signerUuid,
-      channelId: channelId || null,
-      embeds: embeds || [],
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
+    const { rows } = await sql`
+      SELECT * FROM scheduled_posts WHERE id = ${id}
+    `;
 
-    posts.push(newPost);
-    await fs.writeFile(DATA_FILE, JSON.stringify(posts, null, 2));
-
-    return NextResponse.json({ success: true, post: newPost });
+    return NextResponse.json({ success: true, post: rows[0] });
   } catch (error) {
     console.error('Error creating scheduled post:', error);
     return NextResponse.json(
@@ -74,7 +93,7 @@ export async function POST(request: Request) {
   }
 }
 
-// Delete a scheduled post
+// DELETE - Delete a scheduled post
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -84,11 +103,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    const data = await fs.readFile(DATA_FILE, 'utf8');
-    let posts = JSON.parse(data);
-    
-    posts = posts.filter((p: any) => p.id !== postId);
-    await fs.writeFile(DATA_FILE, JSON.stringify(posts, null, 2));
+    await sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {

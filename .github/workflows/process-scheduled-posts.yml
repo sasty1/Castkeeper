@@ -2,105 +2,18 @@ name: Process Scheduled Posts
 
 on:
   schedule:
-    # Runs every hour
-    - cron: '0 * * * *'
-  workflow_dispatch: # Allows manual trigger
+    - cron: '0 * * * *'  # Runs every hour
+  workflow_dispatch:
 
 jobs:
   process-posts:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install @neynar/nodejs-sdk
-
-      - name: Process scheduled posts
+      - name: Process and publish scheduled posts
         env:
           NEYNAR_API_KEY: ${{ secrets.NEYNAR_API_KEY }}
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
         run: |
-          node << 'EOF'
-          const fs = require('fs');
-          const { NeynarAPIClient } = require('@neynar/nodejs-sdk');
-
-          async function processScheduledPosts() {
-            try {
-              const client = new NeynarAPIClient({
-                apiKey: process.env.NEYNAR_API_KEY,
-              });
-
-              const data = fs.readFileSync('./data/scheduled-posts.json', 'utf8');
-              let posts = JSON.parse(data);
-              const now = new Date();
-              let updated = false;
-
-              for (const post of posts) {
-                if (post.status !== 'pending') continue;
-
-                const scheduledTime = new Date(post.scheduledTime);
-                
-                // If it's time to post (within the last hour)
-                if (scheduledTime <= now) {
-                  console.log(`Publishing post: ${post.id}`);
-                  
-                  try {
-                    const castData = {
-                      signerUuid: post.signerUuid,
-                      text: post.text,
-                    };
-
-                    if (post.channelId) {
-                      castData.channelId = post.channelId;
-                    }
-
-                    if (post.embeds && post.embeds.length > 0) {
-                      castData.embeds = post.embeds;
-                    }
-
-                    await client.publishCast(castData);
-                    
-                    post.status = 'published';
-                    post.publishedAt = now.toISOString();
-                    updated = true;
-                    
-                    console.log(`✅ Published post ${post.id}`);
-                  } catch (error) {
-                    console.error(`❌ Failed to publish post ${post.id}:`, error.message);
-                    post.status = 'failed';
-                    post.error = error.message;
-                    updated = true;
-                  }
-                }
-              }
-
-              if (updated) {
-                fs.writeFileSync('./data/scheduled-posts.json', JSON.stringify(posts, null, 2));
-                console.log('Updated scheduled posts file');
-              } else {
-                console.log('No posts to process');
-              }
-            } catch (error) {
-              console.error('Error processing posts:', error);
-              process.exit(1);
-            }
-          }
-
-          processScheduledPosts();
-          EOF
-
-      - name: Commit changes
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add data/scheduled-posts.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update scheduled posts status"
-          git push
+          curl -X POST "https://castkeeper-tsf3.vercel.app/api/cron/publish" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
