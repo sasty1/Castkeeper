@@ -4,12 +4,23 @@ import { useState, useEffect, useRef } from 'react';
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
+// Icons
 const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
 const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
+const ImageIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+
+// Popular channels
+const POPULAR_CHANNELS = [
+  { id: 'general', name: 'General' },
+  { id: 'dev', name: 'Dev' },
+  { id: 'memes', name: 'Memes' },
+  { id: 'art', name: 'Art' },
+  { id: 'crypto', name: 'Crypto' },
+];
 
 function CastKeeperApp() {
   const [user, setUser] = useState<any>(null);
@@ -24,8 +35,19 @@ function CastKeeperApp() {
   const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
+  
+  // NEW: Image upload state
+  const [images, setImages] = useState<string[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // NEW: Channel selector state
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  
+  // NEW: Analytics state
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
-  // --- 1. INITIALIZE SDK ---
+  // Initialize SDK
   useEffect(() => {
     const load = async () => {
       sdk.actions.ready();
@@ -42,7 +64,7 @@ function CastKeeperApp() {
     }
   }, [isSDKLoaded]);
 
-  // --- 2. NATIVE LOGIN (READ ONLY) ---
+  // Native login
   const handleNativeLogin = async () => {
     setLoading(true);
     try {
@@ -71,7 +93,7 @@ function CastKeeperApp() {
     await handleCastDirectly(text);
   };
 
-  // --- 3. REQUEST POSTING PERMISSION (FIXED VERSION) ---
+  // Request posting permission
   const requestSigner = async () => {
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
@@ -81,8 +103,14 @@ function CastKeeperApp() {
       const signerRes = await fetch('/api/auth/signer', {
         method: 'POST',
       });
+      
+      if (!signerRes.ok) {
+        const errorText = await signerRes.text();
+        throw new Error(`Failed to create signer: ${errorText}`);
+      }
+      
       const signer = await signerRes.json();
-      console.log('✅ Signer created:', signer.signer_uuid);
+      console.log('✅ Signer created:', signer);
 
       console.log('Step 2: Registering signed key...');
       const signedKeyRes = await fetch('/api/auth/signer/signed_key', {
@@ -93,25 +121,26 @@ function CastKeeperApp() {
           publicKey: signer.public_key,
         }),
       });
+      
+      if (!signedKeyRes.ok) {
+        const errorText = await signedKeyRes.text();
+        throw new Error(`Failed to register signed key: ${errorText}`);
+      }
+      
       const signedKeyData = await signedKeyRes.json();
-      console.log('✅ Signed key registered:', signedKeyData);
+      console.log('✅ Signed key registered');
 
       const url = signedKeyData.signer_approval_url;
       setApprovalUrl(url);
 
-      // Open Warpcast for approval
       console.log('Step 3: Opening Warpcast...');
       sdk.actions.openUrl(url);
-      console.log('✅ Warpcast opened');
 
-      // Start polling for approval
-      console.log('Step 4: Polling for approval...');
+      // Start polling
       const checkStatus = setInterval(async () => {
         try {
           const pollRes = await fetch(`/api/auth/signer?signerUuid=${signer.signer_uuid}`);
           const statusData = await pollRes.json();
-          
-          console.log('Polling... Status:', statusData.status);
 
           if (statusData.status === 'approved') {
             clearInterval(checkStatus);
@@ -128,7 +157,6 @@ function CastKeeperApp() {
         }
       }, 2000);
 
-      // Stop polling after 5 minutes
       setTimeout(() => {
         clearInterval(checkStatus);
         if (loading) {
@@ -139,14 +167,55 @@ function CastKeeperApp() {
 
     } catch (e: any) {
       console.error('Signer request error:', e);
-      alert("Error: " + e.message);
       setStatus({msg: e.message, type: 'error'});
       setLoading(false);
       setApprovalUrl(null);
     }
   };
 
-  // ... Drafts/Scheduler logic
+  // NEW: Image upload handler
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setImages([...images, data.url]);
+        setStatus({ msg: 'Image uploaded!', type: 'success' });
+        setTimeout(() => setStatus(null), 2000);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      setStatus({ msg: 'Image upload failed', type: 'error' });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // NEW: Fetch analytics
+  const fetchAnalytics = async () => {
+    try {
+      const response = await fetch(`/api/analytics?fid=${user.fid}`);
+      const data = await response.json();
+      setAnalytics(data);
+      setShowAnalytics(true);
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error);
+    }
+  };
+
+  // Drafts management
   useEffect(() => {
     if (user?.fid) {
       const savedDrafts = localStorage.getItem("drafts_" + user.fid);
@@ -154,6 +223,7 @@ function CastKeeperApp() {
     }
   }, [user?.fid]);
 
+  // Schedule timer
   useEffect(() => {
     if (!isScheduled || !targetDate) return;
     const checkTime = () => {
@@ -182,6 +252,7 @@ function CastKeeperApp() {
     setDrafts(updatedDrafts);
     if (user?.fid) localStorage.setItem("drafts_" + user.fid, JSON.stringify(updatedDrafts));
     setText('');
+    setImages([]);
     setStatus({msg: 'Draft saved!', type: 'success'});
     setTimeout(() => setStatus(null), 3000);
   };
@@ -201,33 +272,107 @@ function CastKeeperApp() {
   const handleCastDirectly = async (textToCast: string) => {
     setLoading(true);
     try {
+      const castData: any = { 
+        castText: textToCast, 
+        signerUuid: signerUuid 
+      };
+
+      // Add channel if selected
+      if (selectedChannel) {
+        castData.channelId = selectedChannel;
+      }
+
+      // Add images if any
+      if (images.length > 0) {
+        castData.embeds = images.map(url => ({ url }));
+      }
+
       const response = await fetch('/api/cast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ castText: textToCast, signerUuid: signerUuid }),
+        body: JSON.stringify(castData),
       });
+      
       const data = await response.json();
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
-        if(!isScheduled) setText('');
+        if(!isScheduled) {
+          setText('');
+          setImages([]);
+          setSelectedChannel(null);
+        }
       } else {
         setStatus({msg: data.error, type: 'error'});
         alert("Post Failed: " + data.error);
       }
     } catch (e: any) {
-        setStatus({msg: 'Network error', type: 'error'});
-        alert("Network Error: " + e.message);
+      setStatus({msg: 'Network error', type: 'error'});
+      alert("Network Error: " + e.message);
+    } finally { 
+      setLoading(false); 
     }
-    finally { setLoading(false); }
   };
 
-  // Manual approval button handler
   const openApprovalManually = () => {
     if (approvalUrl) {
-      console.log('Manually opening approval URL...');
       sdk.actions.openUrl(approvalUrl);
     }
   };
+
+  // Analytics Dashboard Component
+  const AnalyticsDashboard = () => (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-900 rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white">Your Stats</h2>
+          <button 
+            onClick={() => setShowAnalytics(false)}
+            className="text-gray-400 hover:text-white text-2xl"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-white/5 rounded-xl p-4">
+            <p className="text-gray-400 text-sm">Total Casts</p>
+            <p className="text-3xl font-bold text-white">{analytics?.totalCasts || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <p className="text-gray-400 text-sm">Total Likes</p>
+            <p className="text-3xl font-bold text-purple-400">{analytics?.totalLikes || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <p className="text-gray-400 text-sm">Avg Likes/Cast</p>
+            <p className="text-3xl font-bold text-blue-400">{analytics?.avgLikes || 0}</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4">
+            <p className="text-gray-400 text-sm">Total Recasts</p>
+            <p className="text-3xl font-bold text-green-400">{analytics?.totalRecasts || 0}</p>
+          </div>
+        </div>
+
+        {analytics?.mostEngaged && (
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+            <p className="text-purple-400 font-semibold mb-2">🔥 Most Engaged Cast</p>
+            <p className="text-white mb-2">{analytics.mostEngaged.text}</p>
+            <div className="flex gap-4 text-sm">
+              <span className="text-gray-400">❤️ {analytics.mostEngaged.likes}</span>
+              <span className="text-gray-400">🔄 {analytics.mostEngaged.recasts}</span>
+            </div>
+            <a 
+              href={analytics.mostEngaged.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-purple-400 text-sm mt-2 inline-block hover:underline"
+            >
+              View cast →
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (!user) {
     return (
@@ -260,16 +405,85 @@ function CastKeeperApp() {
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
-         <button onClick={() => { setUser(null); setSignerUuid(null); }} className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20">Sign Out</button>
+         <div className="flex gap-2">
+           <button 
+             onClick={fetchAnalytics}
+             className="text-xs text-purple-400 border border-purple-500/30 px-3 py-1 rounded hover:bg-purple-500/20"
+           >
+             📊 Stats
+           </button>
+           <button 
+             onClick={() => { setUser(null); setSignerUuid(null); }} 
+             className="text-xs text-red-400 border border-red-500/30 px-3 py-1 rounded hover:bg-red-500/20"
+           >
+             Sign Out
+           </button>
+         </div>
       </div>
+
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
+             {/* Channel Selector */}
+             <div className="flex items-center gap-2">
+               <span className="text-gray-400 text-sm">Post to:</span>
+               <select
+                 value={selectedChannel || ''}
+                 onChange={(e) => setSelectedChannel(e.target.value || null)}
+                 className="bg-black/50 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+               >
+                 <option value="">Home feed</option>
+                 {POPULAR_CHANNELS.map(channel => (
+                   <option key={channel.id} value={channel.id}>
+                     /{channel.id}
+                   </option>
+                 ))}
+               </select>
+             </div>
+
+             {/* Textarea */}
              <textarea 
                className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" 
                placeholder="What's happening?" 
                value={text} 
                onChange={(e) => setText(e.target.value)} 
              />
+
+             {/* Image Upload Button */}
+             <div className="flex gap-2 items-center">
+               <input
+                 type="file"
+                 accept="image/*"
+                 onChange={handleImageUpload}
+                 className="hidden"
+                 id="image-upload"
+               />
+               <label
+                 htmlFor="image-upload"
+                 className="cursor-pointer p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+               >
+                 <ImageIcon />
+               </label>
+               {uploadingImage && <span className="text-xs text-gray-400">Uploading...</span>}
+             </div>
+
+             {/* Uploaded Images Preview */}
+             {images.length > 0 && (
+               <div className="flex gap-2 flex-wrap">
+                 {images.map((url, i) => (
+                   <div key={i} className="relative">
+                     <img src={url} alt="Upload" className="w-20 h-20 object-cover rounded" />
+                     <button
+                       onClick={() => setImages(images.filter((_, idx) => idx !== i))}
+                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
+                     >
+                       ×
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             )}
+
+             {/* Action Buttons */}
              <div className="flex gap-3 pt-2">
                 <button
                   onClick={handleSmartCast}
@@ -297,6 +511,7 @@ function CastKeeperApp() {
                 </button>
              )}
 
+             {/* Scheduler */}
              <div className="pt-4 border-t border-white/10 space-y-3">
               {!isScheduled ? (
                 <div className="flex gap-2 items-center">
@@ -366,11 +581,15 @@ function CastKeeperApp() {
         </div>
       )}
 
+      {/* Status Messages */}
       {status && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap z-50 shadow-lg">
           {status.msg}
         </div>
       )}
+
+      {/* Analytics Modal */}
+      {showAnalytics && analytics && <AnalyticsDashboard />}
     </div>
   );
 }
