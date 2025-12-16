@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
@@ -13,7 +13,6 @@ const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="curren
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 const ImageIcon = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
 
-// Popular channels
 const POPULAR_CHANNELS = [
   { id: 'general', name: 'General' },
   { id: 'dev', name: 'Dev' },
@@ -21,7 +20,6 @@ const POPULAR_CHANNELS = [
   { id: 'art', name: 'Art' },
   { id: 'crypto', name: 'Crypto' },
 ];
-
 function CastKeeperApp() {
   const [user, setUser] = useState<any>(null);
   const [signerUuid, setSignerUuid] = useState<string | null>(null);
@@ -30,24 +28,15 @@ function CastKeeperApp() {
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState<any[]>([]);
   const [targetDate, setTargetDate] = useState<string>('');
-  const [isScheduled, setIsScheduled] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<string>('');
-  const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
-  
-  // NEW: Image upload state
   const [images, setImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
-  
-  // NEW: Channel selector state
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
-  
-  // NEW: Analytics state
   const [analytics, setAnalytics] = useState<any>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [scheduledPosts, setScheduledPosts] = useState<any[]>([]);
 
-  // Initialize SDK
   useEffect(() => {
     const load = async () => {
       sdk.actions.ready();
@@ -64,21 +53,37 @@ function CastKeeperApp() {
     }
   }, [isSDKLoaded]);
 
-  // Native login
+  useEffect(() => {
+    if (user?.fid) {
+      fetchScheduledPosts();
+      const savedDrafts = localStorage.getItem("drafts_" + user.fid);
+      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
+    }
+  }, [user?.fid]);
+
+  const fetchScheduledPosts = async () => {
+    if (!user?.fid) return;
+    try {
+      const response = await fetch(`/api/scheduled?fid=${user.fid}`);
+      const data = await response.json();
+      setScheduledPosts(data.posts || []);
+    } catch (error) {
+      console.error('Error fetching scheduled posts:', error);
+    }
+  };
+
   const handleNativeLogin = async () => {
     setLoading(true);
     try {
       const nonceRes = await fetch('/api/auth/nonce');
       const { nonce } = await nonceRes.json();
-      
       const result = await sdk.actions.signIn({ nonce });
       const u = (result as any).user;
       setUser(u);
-
       const savedSigner = localStorage.getItem("signer_" + u.fid);
       if (savedSigner) setSignerUuid(savedSigner);
-
       setStatus({msg: 'Signed in!', type: 'success'});
+      setTimeout(() => setStatus(null), 2000);
     } catch (e: any) {
       console.error('Login error:', e);
       setStatus({msg: 'Login failed. Try again.', type: 'error'});
@@ -92,9 +97,7 @@ function CastKeeperApp() {
     if (!signerUuid) { await requestSigner(); return; }
     await handleCastDirectly(text);
   };
-
-  // Request posting permission
-  const requestSigner = async () => {
+const requestSigner = async () => {
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
     
@@ -136,7 +139,6 @@ function CastKeeperApp() {
       console.log('Step 3: Opening Warpcast...');
       sdk.actions.openUrl(url);
 
-      // Start polling
       const checkStatus = setInterval(async () => {
         try {
           const pollRes = await fetch(`/api/auth/signer?signerUuid=${signer.signer_uuid}`);
@@ -145,7 +147,6 @@ function CastKeeperApp() {
           if (statusData.status === 'approved') {
             clearInterval(checkStatus);
             console.log('🎉 Signer approved!');
-            
             setSignerUuid(signer.signer_uuid);
             localStorage.setItem("signer_" + user.fid, signer.signer_uuid);
             setStatus({msg: 'Approved! Click Cast again.', type: 'success'});
@@ -172,22 +173,17 @@ function CastKeeperApp() {
       setApprovalUrl(null);
     }
   };
-
-  // NEW: Image upload handler
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadingImage(true);
     try {
       const formData = new FormData();
       formData.append('image', file);
-
       const response = await fetch('/api/upload-image', {
         method: 'POST',
         body: formData,
       });
-
       const data = await response.json();
       if (data.success) {
         setImages([...images, data.url]);
@@ -203,7 +199,6 @@ function CastKeeperApp() {
     }
   };
 
-  // NEW: Fetch analytics
   const fetchAnalytics = async () => {
     try {
       const response = await fetch(`/api/analytics?fid=${user.fid}`);
@@ -214,36 +209,6 @@ function CastKeeperApp() {
       console.error('Failed to fetch analytics:', error);
     }
   };
-
-  // Drafts management
-  useEffect(() => {
-    if (user?.fid) {
-      const savedDrafts = localStorage.getItem("drafts_" + user.fid);
-      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
-    }
-  }, [user?.fid]);
-
-  // Schedule timer
-  useEffect(() => {
-    if (!isScheduled || !targetDate) return;
-    const checkTime = () => {
-      const now = Date.now();
-      const target = new Date(targetDate).getTime();
-      const diff = target - now;
-      if (diff <= 0) {
-        handleCastDirectly(text); 
-        resetSchedule();
-      } else {
-        const seconds = Math.floor((diff / 1000) % 60);
-        const minutes = Math.floor((diff / 1000 / 60) % 60);
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        setTimeLeft(days + "d " + hours + "h " + minutes + "m " + seconds + "s");
-      }
-    };
-    timerRef.current = setInterval(checkTime, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isScheduled, targetDate, text]);
 
   const saveDraft = () => {
     if (!text) return;
@@ -257,16 +222,61 @@ function CastKeeperApp() {
     setTimeout(() => setStatus(null), 3000);
   };
 
-  const startSchedule = () => {
-    if (!targetDate) return;
-    setIsScheduled(true);
-    setStatus({msg: 'Scheduled! Keep tab open.', type: 'neutral'});
+  const startSchedule = async () => {
+    if (!targetDate || !text) {
+      alert('Please enter text and select a date/time');
+      return;
+    }
+    if (!signerUuid) {
+      alert('Please approve posting permission first');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch('/api/scheduled', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fid: user.fid,
+          text,
+          scheduledTime: targetDate,
+          signerUuid,
+          channelId: selectedChannel,
+          embeds: images.map(url => ({ url })),
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setStatus({ msg: '✅ Scheduled! Will post automatically.', type: 'success' });
+        setText('');
+        setImages([]);
+        setSelectedChannel(null);
+        setTargetDate('');
+        fetchScheduledPosts();
+        setTimeout(() => setStatus(null), 3000);
+      } else {
+        throw new Error(data.error || 'Failed to schedule');
+      }
+    } catch (error: any) {
+      setStatus({ msg: 'Schedule failed: ' + error.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const resetSchedule = () => {
-    setIsScheduled(false);
-    setTimeLeft('');
-    setStatus({msg: 'Schedule cancelled', type: 'neutral'});
+  const deleteScheduledPost = async (postId: string) => {
+    try {
+      const response = await fetch(`/api/scheduled?postId=${postId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setStatus({ msg: 'Scheduled post deleted', type: 'success' });
+        fetchScheduledPosts();
+        setTimeout(() => setStatus(null), 2000);
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+    }
   };
 
   const handleCastDirectly = async (textToCast: string) => {
@@ -276,38 +286,29 @@ function CastKeeperApp() {
         castText: textToCast, 
         signerUuid: signerUuid 
       };
-
-      // Add channel if selected
       if (selectedChannel) {
         castData.channelId = selectedChannel;
       }
-
-      // Add images if any
       if (images.length > 0) {
         castData.embeds = images.map(url => ({ url }));
       }
-
       const response = await fetch('/api/cast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(castData),
       });
-      
       const data = await response.json();
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
-        if(!isScheduled) {
-          setText('');
-          setImages([]);
-          setSelectedChannel(null);
-        }
+        setText('');
+        setImages([]);
+        setSelectedChannel(null);
+        setTimeout(() => setStatus(null), 3000);
       } else {
         setStatus({msg: data.error, type: 'error'});
-        alert("Post Failed: " + data.error);
       }
     } catch (e: any) {
       setStatus({msg: 'Network error', type: 'error'});
-      alert("Network Error: " + e.message);
     } finally { 
       setLoading(false); 
     }
@@ -318,9 +319,7 @@ function CastKeeperApp() {
       sdk.actions.openUrl(approvalUrl);
     }
   };
-
-  // Analytics Dashboard Component
-  const AnalyticsDashboard = () => (
+const AnalyticsDashboard = () => (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
       <div className="bg-gray-900 rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
@@ -332,7 +331,6 @@ function CastKeeperApp() {
             ✕
           </button>
         </div>
-
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="bg-white/5 rounded-xl p-4">
             <p className="text-gray-400 text-sm">Total Casts</p>
@@ -351,7 +349,6 @@ function CastKeeperApp() {
             <p className="text-3xl font-bold text-green-400">{analytics?.totalRecasts || 0}</p>
           </div>
         </div>
-
         {analytics?.mostEngaged && (
           <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
             <p className="text-purple-400 font-semibold mb-2">🔥 Most Engaged Cast</p>
@@ -400,8 +397,7 @@ function CastKeeperApp() {
       </div>
     );
   }
-
-  return (
+return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
          <h1 className="text-xl font-bold text-white">Hello, @{user.username}</h1>
@@ -423,7 +419,6 @@ function CastKeeperApp() {
 
       <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-1 shadow-2xl">
           <div className="bg-black/40 rounded-xl p-5 space-y-4">
-             {/* Channel Selector */}
              <div className="flex items-center gap-2">
                <span className="text-gray-400 text-sm">Post to:</span>
                <select
@@ -440,7 +435,6 @@ function CastKeeperApp() {
                </select>
              </div>
 
-             {/* Textarea */}
              <textarea 
                className="w-full bg-transparent text-white text-lg p-2 outline-none resize-none min-h-[120px]" 
                placeholder="What's happening?" 
@@ -448,7 +442,6 @@ function CastKeeperApp() {
                onChange={(e) => setText(e.target.value)} 
              />
 
-             {/* Image Upload Button */}
              <div className="flex gap-2 items-center">
                <input
                  type="file"
@@ -466,7 +459,6 @@ function CastKeeperApp() {
                {uploadingImage && <span className="text-xs text-gray-400">Uploading...</span>}
              </div>
 
-             {/* Uploaded Images Preview */}
              {images.length > 0 && (
                <div className="flex gap-2 flex-wrap">
                  {images.map((url, i) => (
@@ -483,7 +475,6 @@ function CastKeeperApp() {
                </div>
              )}
 
-             {/* Action Buttons */}
              <div className="flex gap-3 pt-2">
                 <button
                   onClick={handleSmartCast}
@@ -511,9 +502,7 @@ function CastKeeperApp() {
                 </button>
              )}
 
-             {/* Scheduler */}
              <div className="pt-4 border-t border-white/10 space-y-3">
-              {!isScheduled ? (
                 <div className="flex gap-2 items-center">
                   <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
@@ -526,34 +515,46 @@ function CastKeeperApp() {
                   </div>
                   <button 
                     onClick={startSchedule} 
-                    className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors"
+                    disabled={loading || !text || !targetDate}
+                    className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors disabled:opacity-50"
                   >
                     Schedule
                   </button>
                 </div>
-              ) : (
-                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
-                  <div className="flex items-center text-purple-200 font-mono">
-                    <ClockIcon /> 
-                    <span className="font-bold tracking-wider">{timeLeft}</span>
-                  </div>
-                  <button 
-                    onClick={resetSchedule} 
-                    className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
             </div>
           </div>
       </div>
+{scheduledPosts.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Scheduled Posts</h3>
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {scheduledPosts.map((post: any) => (
+              <div 
+                key={post.id} 
+                className="group flex justify-between items-center p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl"
+              >
+                <div className="overflow-hidden flex-1">
+                  <p className="text-white text-sm truncate">{post.text}</p>
+                  <p className="text-purple-400 text-xs mt-1">
+                    📅 {new Date(post.scheduledTime).toLocaleString()}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => deleteScheduledPost(post.id)} 
+                  className="text-gray-400 hover:text-red-400 p-2 transition-colors"
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Drafts List */}
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
             {drafts.map((draft: any) => (
               <div 
                 key={draft.id} 
@@ -581,14 +582,12 @@ function CastKeeperApp() {
         </div>
       )}
 
-      {/* Status Messages */}
       {status && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-gray-800 text-white border border-gray-700 whitespace-nowrap z-50 shadow-lg">
           {status.msg}
         </div>
       )}
 
-      {/* Analytics Modal */}
       {showAnalytics && analytics && <AnalyticsDashboard />}
     </div>
   );
