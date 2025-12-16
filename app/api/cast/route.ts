@@ -1,48 +1,48 @@
 import { NextResponse } from 'next/server';
+import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 
-// 1. Force Vercel to allow API keys
-export const dynamic = 'force-dynamic';
-
-export async function POST(req: Request) {
-  const apiKey = process.env.NEYNAR_API_KEY;
-  
-  if (!apiKey) {
-    return NextResponse.json({ success: false, error: 'Server Error: API Key missing' }, { status: 500 });
-  }
-
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const { castText, signerUuid } = body;
+    const body = await request.json();
+    const { castText, signerUuid, channelId, embeds } = body;
 
     if (!castText || !signerUuid) {
-      return NextResponse.json({ success: false, error: 'Missing text or signer UUID' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
 
-    // 2. Direct Fetch to Neynar (No SDK)
-    const response = await fetch("https://api.neynar.com/v2/farcaster/cast", {
-      method: "POST",
-      headers: {
-        "accept": "application/json",
-        "api_key": apiKey,
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        signer_uuid: signerUuid,
-        text: castText
-      })
+    const client = new NeynarAPIClient({
+      apiKey: process.env.NEYNAR_API_KEY!,
     });
 
-    const data = await response.json();
+    const castData: any = {
+      signerUuid,
+      text: castText,
+    };
 
-    if (!response.ok) {
-      console.error("Neynar Cast Error:", data);
-      return NextResponse.json({ success: false, error: data.message || "Failed to publish cast" });
+    // Add channel if provided
+    if (channelId) {
+      castData.channelId = channelId;
     }
 
-    return NextResponse.json({ success: true, message: 'Cast published', hash: data.cast.hash });
+    // Add images/embeds if provided
+    if (embeds && embeds.length > 0) {
+      castData.embeds = embeds;
+    }
+
+    const result = await client.publishCast(castData);
+
+    return NextResponse.json({
+      success: true,
+      cast: result,
+    });
   } catch (error: any) {
-    console.error('Server Cast Error:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Server failed' }, { status: 500 });
+    console.error('Cast error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to publish cast' },
+      { status: 500 }
+    );
   }
 }
-
