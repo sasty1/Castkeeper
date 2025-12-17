@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import postgres from 'postgres';
+
+function getSql() {
+  return postgres(process.env.PRISMA_DATABASE_URL!, {
+    ssl: 'require',
+  });
+}
 
 async function initDB() {
+  const sql = getSql();
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS scheduled_posts (
@@ -18,10 +25,13 @@ async function initDB() {
     `;
   } catch (error) {
     console.error('DB init error:', error);
+  } finally {
+    await sql.end();
   }
 }
 
 export async function GET(request: Request) {
+  const sql = getSql();
   try {
     await initDB();
     
@@ -32,7 +42,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT * FROM scheduled_posts 
       WHERE fid = ${parseInt(fid)} AND status = 'pending'
       ORDER BY scheduled_time ASC
@@ -42,10 +52,13 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching scheduled posts:', error);
     return NextResponse.json({ posts: [] });
+  } finally {
+    await sql.end();
   }
 }
 
 export async function POST(request: Request) {
+  const sql = getSql();
   try {
     await initDB();
     
@@ -76,7 +89,7 @@ export async function POST(request: Request) {
       )
     `;
 
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT * FROM scheduled_posts WHERE id = ${id}
     `;
 
@@ -87,10 +100,13 @@ export async function POST(request: Request) {
       { error: 'Failed to schedule post' },
       { status: 500 }
     );
+  } finally {
+    await sql.end();
   }
 }
 
 export async function DELETE(request: Request) {
+  const sql = getSql();
   try {
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId');
@@ -108,6 +124,8 @@ export async function DELETE(request: Request) {
       { error: 'Failed to delete post' },
       { status: 500 }
     );
+  } finally {
+    await sql.end();
   }
 }
 
