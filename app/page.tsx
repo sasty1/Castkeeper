@@ -14,20 +14,20 @@ const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentC
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
-  // FIX: Added <any> here so TypeScript stops complaining
+  // FIX: Using <any> here solves the build errors completely
   const [user, setUser] = useState<any>(null);
+  const [signerUuid, setSignerUuid] = useState<any>(null);
   
-  const [signerUuid, setSignerUuid] = useState(null);
   const [text, setText] = useState('');
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [drafts, setDrafts] = useState([]);
+  const [drafts, setDrafts] = useState<any[]>([]);
   const [targetDate, setTargetDate] = useState('');
   const [isScheduled, setIsScheduled] = useState(false);
   const [timeLeft, setTimeLeft] = useState('');
-  const timerRef = useRef(null);
+  const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
-  const [approvalUrl, setApprovalUrl] = useState(null);
+  const [approvalUrl, setApprovalUrl] = useState<any>(null);
 
   // Initialize SDK
   useEffect(() => {
@@ -36,8 +36,7 @@ function CastKeeperApp() {
       const context = await sdk.context;
       if (context?.user) {
         setUser(context.user);
-        // FIX: Accessing localStorage needs to be safe or type checked, <any> helps here too
-        const u = context.user as any;
+        const u = context.user as any; 
         const savedSigner = localStorage.getItem("signer_" + u.fid);
         if (savedSigner) setSignerUuid(savedSigner);
       }
@@ -53,7 +52,6 @@ function CastKeeperApp() {
       const { nonce } = await nonceRes.json();
       const result = await sdk.actions.signIn({ nonce });
       
-      // FIX: Cast result to any
       const u = (result as any).user;
       setUser(u);
       
@@ -121,7 +119,7 @@ function CastKeeperApp() {
     }
   };
 
-  const handleCastDirectly = async (textToCast) => {
+  const handleCastDirectly = async (textToCast: string) => {
     setLoading(true);
     try {
       const response = await fetch('/api/cast', {
@@ -164,7 +162,7 @@ function CastKeeperApp() {
             if (statusData.status === 'approved') {
               clearInterval(checkStatus);
               setSignerUuid(data.signerUuid);
-              // Safely access user fid with ?
+              
               if (user?.fid) {
                   localStorage.setItem("signer_" + user.fid, data.signerUuid);
               }
@@ -175,9 +173,8 @@ function CastKeeperApp() {
         } catch(ignored) {}
       }, 2000);
       
-    } catch (e) {
-      // Cast e to any for safety
-      setStatus({msg: (e as any).message, type: 'error'});
+    } catch (e: any) {
+      setStatus({msg: e.message, type: 'error'});
       setLoading(false);
     }
   };
@@ -280,14 +277,14 @@ function CastKeeperApp() {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
                     <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
                   </div>
-               </div>
-               
-               {isScheduled && targetDate && (
+                  <button onClick={startSchedule} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Schedule</button>
+                </div>
+              ) : (
                 <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
                   <div className="flex items-center text-purple-200 font-mono"><ClockIcon /> <span className="font-bold tracking-wider">{timeLeft || "Ready"}</span></div>
                   <button onClick={resetSchedule} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20">Cancel</button>
                 </div>
-               )}
+              )}
             </div>
           </div>
       </div>
