@@ -14,7 +14,9 @@ const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentC
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
 function CastKeeperApp() {
-  const [user, setUser] = useState(null);
+  // FIX: Added <any> here so TypeScript stops complaining
+  const [user, setUser] = useState<any>(null);
+  
   const [signerUuid, setSignerUuid] = useState(null);
   const [text, setText] = useState('');
   const [status, setStatus] = useState(null);
@@ -34,7 +36,9 @@ function CastKeeperApp() {
       const context = await sdk.context;
       if (context?.user) {
         setUser(context.user);
-        const savedSigner = localStorage.getItem("signer_" + context.user.fid);
+        // FIX: Accessing localStorage needs to be safe or type checked, <any> helps here too
+        const u = context.user as any;
+        const savedSigner = localStorage.getItem("signer_" + u.fid);
         if (savedSigner) setSignerUuid(savedSigner);
       }
     };
@@ -48,7 +52,9 @@ function CastKeeperApp() {
       const nonceRes = await fetch('/api/auth/nonce');
       const { nonce } = await nonceRes.json();
       const result = await sdk.actions.signIn({ nonce });
-      const u = result.user;
+      
+      // FIX: Cast result to any
+      const u = (result as any).user;
       setUser(u);
       
       const savedSigner = localStorage.getItem("signer_" + u.fid);
@@ -140,6 +146,7 @@ function CastKeeperApp() {
     try {
       const res = await fetch('/api/connect', { method: 'POST' });
       const data = await res.json();
+      
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
       let deepLink = data.link;
@@ -157,15 +164,20 @@ function CastKeeperApp() {
             if (statusData.status === 'approved') {
               clearInterval(checkStatus);
               setSignerUuid(data.signerUuid);
-              localStorage.setItem("signer_" + user.fid, data.signerUuid);
+              // Safely access user fid with ?
+              if (user?.fid) {
+                  localStorage.setItem("signer_" + user.fid, data.signerUuid);
+              }
               setStatus({msg: 'Approved! Click Cast again.', type: 'success'});
               setLoading(false);
               setApprovalUrl(null);
             }
         } catch(ignored) {}
       }, 2000);
+      
     } catch (e) {
-      setStatus({msg: e.message, type: 'error'});
+      // Cast e to any for safety
+      setStatus({msg: (e as any).message, type: 'error'});
       setLoading(false);
     }
   };
@@ -253,7 +265,7 @@ function CastKeeperApp() {
                   disabled={loading || !text} 
                   className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all"
                 >
-                  {loading ? (signerUuid ? 'Processing...' : 'Waiting...') : (targetDate ? <><ClockIcon /> Schedule</> : <><SendIcon /> Cast Now</>)}
+                  {loading ? (signerUuid ? 'Casting...' : 'Waiting...') : (targetDate ? <><ClockIcon /> Schedule</> : <><SendIcon /> Cast Now</>)}
                 </button>
                 <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
              </div>
@@ -280,6 +292,7 @@ function CastKeeperApp() {
           </div>
       </div>
       
+      {/* Drafts List */}
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
