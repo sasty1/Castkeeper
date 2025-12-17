@@ -11,9 +11,6 @@ jobs:
     
     steps:
       - name: Process and publish scheduled posts
-        env:
-          NEYNAR_API_KEY: ${{ secrets.NEYNAR_API_KEY }}
-          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
         run: |
           curl -X POST "https://castkeeper-tsf3.vercel.app/api/cron/publish" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
