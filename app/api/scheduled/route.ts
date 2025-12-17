@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server';
-import postgres from 'postgres';
-
-function getSql() {
-  return postgres(process.env.PRISMA_DATABASE_URL!, {
-    ssl: 'require',
-  });
-}
+import { db } from '@vercel/postgres';
 
 async function initDB() {
-  const sql = getSql();
+  const client = await db.connect();
   try {
-    await sql`
+    await client.sql`
       CREATE TABLE IF NOT EXISTS scheduled_posts (
         id TEXT PRIMARY KEY,
         fid INTEGER NOT NULL,
@@ -26,12 +20,12 @@ async function initDB() {
   } catch (error) {
     console.error('DB init error:', error);
   } finally {
-    await sql.end();
+    client.release();
   }
 }
 
 export async function GET(request: Request) {
-  const sql = getSql();
+  const client = await db.connect();
   try {
     await initDB();
     
@@ -42,23 +36,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const rows = await sql`
+    const result = await client.sql`
       SELECT * FROM scheduled_posts 
       WHERE fid = ${parseInt(fid)} AND status = 'pending'
       ORDER BY scheduled_time ASC
     `;
 
-    return NextResponse.json({ posts: rows });
+    return NextResponse.json({ posts: result.rows });
   } catch (error) {
     console.error('Error fetching scheduled posts:', error);
     return NextResponse.json({ posts: [] });
   } finally {
-    await sql.end();
+    client.release();
   }
 }
 
 export async function POST(request: Request) {
-  const sql = getSql();
+  const client = await db.connect();
   try {
     await initDB();
     
@@ -74,7 +68,7 @@ export async function POST(request: Request) {
 
     const id = Date.now().toString();
     
-    await sql`
+    await client.sql`
       INSERT INTO scheduled_posts 
       (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status)
       VALUES (
@@ -89,11 +83,11 @@ export async function POST(request: Request) {
       )
     `;
 
-    const rows = await sql`
+    const result = await client.sql`
       SELECT * FROM scheduled_posts WHERE id = ${id}
     `;
 
-    return NextResponse.json({ success: true, post: rows[0] });
+    return NextResponse.json({ success: true, post: result.rows[0] });
   } catch (error) {
     console.error('Error creating scheduled post:', error);
     return NextResponse.json(
@@ -101,12 +95,12 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   } finally {
-    await sql.end();
+    client.release();
   }
 }
 
 export async function DELETE(request: Request) {
-  const sql = getSql();
+  const client = await db.connect();
   try {
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId');
@@ -115,7 +109,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    await sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
+    await client.sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -125,7 +119,7 @@ export async function DELETE(request: Request) {
       { status: 500 }
     );
   } finally {
-    await sql.end();
+    client.release();
   }
 }
 
