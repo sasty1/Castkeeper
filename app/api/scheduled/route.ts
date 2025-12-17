@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createPool } from '@vercel/postgres';
-
-const pool = createPool({
-  connectionString: process.env.POSTGRES_URL,
-});
+import { sql } from '@vercel/postgres';
 
 async function initDB() {
   try {
-    await pool.sql`
+    await sql`
       CREATE TABLE IF NOT EXISTS scheduled_posts (
         id TEXT PRIMARY KEY,
         fid INTEGER NOT NULL,
@@ -36,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const { rows } = await pool.sql`
+    const { rows } = await sql`
       SELECT * FROM scheduled_posts 
       WHERE fid = ${parseInt(fid)} AND status = 'pending'
       ORDER BY scheduled_time ASC
@@ -65,7 +61,7 @@ export async function POST(request: Request) {
 
     const id = Date.now().toString();
     
-    await pool.sql`
+    await sql`
       INSERT INTO scheduled_posts 
       (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status)
       VALUES (
@@ -80,7 +76,7 @@ export async function POST(request: Request) {
       )
     `;
 
-    const { rows } = await pool.sql`
+    const { rows } = await sql`
       SELECT * FROM scheduled_posts WHERE id = ${id}
     `;
 
@@ -103,7 +99,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    await pool.sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
+    await sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -114,3 +110,6 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
