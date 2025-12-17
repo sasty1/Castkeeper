@@ -536,8 +536,8 @@ return (
                 <div className="overflow-hidden flex-1">
                   <p className="text-white text-sm truncate">{post.text}</p>
                   <p className="text-purple-400 text-xs mt-1">
-                    📅 {new Date(post.scheduledTime).toLocaleString()}
-                  </p>
+  📅 {new Date(post.scheduled_time).toLocaleString()}
+</p>
                 </div>
                 <button 
                   onClick={() => deleteScheduledPost(post.id)} 
