@@ -1,10 +1,18 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import { Pool } from 'pg';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
+
+function getPool() {
+  return new Pool({
+    connectionString: process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+}
 
 export async function POST(request: Request) {
   try {
-    // Verify cron secret
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -14,17 +22,16 @@ export async function POST(request: Request) {
       apiKey: process.env.NEYNAR_API_KEY!,
     });
 
+    const pool = getPool();
     const now = new Date();
     let processedCount = 0;
 
-    // Get posts that need to be published
-    const { rows } = await sql`
-      SELECT * FROM scheduled_posts 
-      WHERE status = 'pending' 
-      AND scheduled_time <= ${now.toISOString()}
-    `;
+    const result = await pool.query(
+      'SELECT * FROM scheduled_posts WHERE status = $1 AND scheduled_time <= $2',
+      ['pending', now.toISOString()]
+    );
 
-    for (const post of rows) {
+    for (const post of result.rows) {
       try {
         console.log(`Publishing post: ${post.id}`);
         
@@ -43,26 +50,24 @@ export async function POST(request: Request) {
 
         await client.publishCast(castData);
         
-        // Mark as published
-        await sql`
-          UPDATE scheduled_posts 
-          SET status = 'published', published_at = NOW()
-          WHERE id = ${post.id}
-        `;
+        await pool.query(
+          'UPDATE scheduled_posts SET status = $1, published_at = NOW() WHERE id = $2',
+          ['published', post.id]
+        );
         
         processedCount++;
         console.log(`✅ Published post ${post.id}`);
       } catch (error: any) {
         console.error(`❌ Failed to publish post ${post.id}:`, error);
         
-        // Mark as failed
-        await sql`
-          UPDATE scheduled_posts 
-          SET status = 'failed', error = ${error.message}
-          WHERE id = ${post.id}
-        `;
+        await pool.query(
+          'UPDATE scheduled_posts SET status = $1, error = $2 WHERE id = $3',
+          ['failed', error.message, post.id]
+        );
       }
     }
+
+    await pool.end();
 
     return NextResponse.json({
       success: true,
@@ -77,5 +82,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
