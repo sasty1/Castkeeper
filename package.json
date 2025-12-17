@@ -14,6 +14,7 @@
     "@neynar/nodejs-sdk": "^3.97.0",
     "@neynar/react": "^1.2.22",
     "@pigment-css/react": "^0.0.30",
+    "@upstash/qstash": "^2.8.4",
     "@vercel/kv": "^3.0.0",
     "@vercel/postgres": "^0.10.0",
     "next": "^16.0.7",
