@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
-import { db } from '@vercel/postgres';
+import { Pool } from 'pg';
+
+function getPool() {
+  return new Pool({
+    connectionString: process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+}
 
 async function initDB() {
-  const client = await db.connect();
+  const pool = getPool();
   try {
-    await client.sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS scheduled_posts (
         id TEXT PRIMARY KEY,
         fid INTEGER NOT NULL,
@@ -16,16 +25,16 @@ async function initDB() {
         status TEXT DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT NOW()
       )
-    `;
+    `);
   } catch (error) {
     console.error('DB init error:', error);
   } finally {
-    client.release();
+    await pool.end();
   }
 }
 
 export async function GET(request: Request) {
-  const client = await db.connect();
+  const pool = getPool();
   try {
     await initDB();
     
@@ -36,23 +45,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const result = await client.sql`
-      SELECT * FROM scheduled_posts 
-      WHERE fid = ${parseInt(fid)} AND status = 'pending'
-      ORDER BY scheduled_time ASC
-    `;
+    const result = await pool.query(
+      'SELECT * FROM scheduled_posts WHERE fid = $1 AND status = $2 ORDER BY scheduled_time ASC',
+      [parseInt(fid), 'pending']
+    );
 
     return NextResponse.json({ posts: result.rows });
   } catch (error) {
     console.error('Error fetching scheduled posts:', error);
     return NextResponse.json({ posts: [] });
   } finally {
-    client.release();
+    await pool.end();
   }
 }
 
 export async function POST(request: Request) {
-  const client = await db.connect();
+  const pool = getPool();
   try {
     await initDB();
     
@@ -68,24 +76,12 @@ export async function POST(request: Request) {
 
     const id = Date.now().toString();
     
-    await client.sql`
-      INSERT INTO scheduled_posts 
-      (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status)
-      VALUES (
-        ${id}, 
-        ${parseInt(fid)}, 
-        ${text}, 
-        ${scheduledTime}, 
-        ${signerUuid},
-        ${channelId || null},
-        ${JSON.stringify(embeds || [])},
-        'pending'
-      )
-    `;
+    await pool.query(
+      'INSERT INTO scheduled_posts (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+      [id, parseInt(fid), text, scheduledTime, signerUuid, channelId || null, JSON.stringify(embeds || []), 'pending']
+    );
 
-    const result = await client.sql`
-      SELECT * FROM scheduled_posts WHERE id = ${id}
-    `;
+    const result = await pool.query('SELECT * FROM scheduled_posts WHERE id = $1', [id]);
 
     return NextResponse.json({ success: true, post: result.rows[0] });
   } catch (error) {
@@ -95,12 +91,12 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   } finally {
-    client.release();
+    await pool.end();
   }
 }
 
 export async function DELETE(request: Request) {
-  const client = await db.connect();
+  const pool = getPool();
   try {
     const { searchParams } = new URL(request.url);
     const postId = searchParams.get('postId');
@@ -109,7 +105,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    await client.sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
+    await pool.query('DELETE FROM scheduled_posts WHERE id = $1', [postId]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -119,7 +115,7 @@ export async function DELETE(request: Request) {
       { status: 500 }
     );
   } finally {
-    client.release();
+    await pool.end();
   }
 }
 
