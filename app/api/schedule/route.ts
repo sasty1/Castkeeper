@@ -10,32 +10,25 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { text, signerUuid, targetDate } = body;
+    // Accept 'delaySeconds' directly from the frontend
+    const { text, signerUuid, delaySeconds } = body;
 
-    if (!text || !signerUuid || !targetDate) {
+    if (!text || !signerUuid || delaySeconds === undefined) {
       return NextResponse.json({ error: 'Missing data' }, { status: 400 });
-    }
-
-    // Calculate how many seconds to wait
-    const now = new Date().getTime();
-    const target = new Date(targetDate).getTime();
-    const delaySeconds = Math.floor((target - now) / 1000);
-
-    if (delaySeconds < 1) {
-      return NextResponse.json({ error: 'Time must be in the future' }, { status: 400 });
     }
 
     console.log("Scheduling for " + delaySeconds + " seconds via QStash");
 
-    // Send to QStash. 
-    // QStash will wake up your /api/cast API when the time comes.
+    // Enforce a minimum delay of 1 second
+    const finalDelay = Math.max(1, delaySeconds);
+
     const result = await qstash.publishJSON({
       url: "https://castkeeper-tsf3.vercel.app/api/cast",
       body: {
         castText: text,
         signerUuid: signerUuid
       },
-      delay: delaySeconds,
+      delay: finalDelay,
     });
 
     return NextResponse.json({ success: true, id: result.messageId });

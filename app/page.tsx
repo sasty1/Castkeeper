@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import sdk from '@farcaster/frame-sdk';
 import "@neynar/react/dist/style.css";
 
+// ... (Keeping imports exactly as they were, they are fine)
+const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
 const SendIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>;
 const SaveIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>;
 const TrashIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
 const ClockIcon = () => <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
-const FarcasterIcon = () => <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 14c1.104 0 2-.896 2-2s-.896-2-2-2-2 .896-2 2 .896 2 2 2z"/></svg>;
 const KeyIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.5 15.5a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077l4.774-4.566A6 6 0 0115 7zm0 2a2 2 0 100-4 2 2 0 000 4z" /></svg>;
 const LinkIcon = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>;
 
@@ -21,9 +22,12 @@ function CastKeeperApp() {
   const [drafts, setDrafts] = useState<any[]>([]);
   const [targetDate, setTargetDate] = useState<string>('');
   const [isScheduled, setIsScheduled] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const timerRef = useRef<any>(null);
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null);
 
+  // Initialize SDK
   useEffect(() => {
     const load = async () => { 
       sdk.actions.ready(); 
@@ -37,6 +41,7 @@ function CastKeeperApp() {
     if (sdk && !isSDKLoaded) { setIsSDKLoaded(true); load(); }
   }, [isSDKLoaded]);
 
+  // Native Login
   const handleNativeLogin = async () => {
     setLoading(true);
     try {
@@ -48,38 +53,52 @@ function CastKeeperApp() {
       
       const savedSigner = localStorage.getItem("signer_" + u.fid);
       if (savedSigner) setSignerUuid(savedSigner);
-      setStatus({msg: 'Signed in!', type: 'success'});
-    } catch (e) { setStatus({msg: 'Login failed.', type: 'error'}); } 
-    finally { setLoading(false); }
+      setStatus({msg: 'Signed in successfully!', type: 'success'});
+    } catch (e) { 
+      setStatus({msg: 'Login failed. Try again.', type: 'error'}); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSmartCast = async () => {
-    if (!text) { setStatus({msg: 'Write something!', type: 'error'}); return; }
+    if (!text) { setStatus({msg: 'Write something!', type: 'neutral'}); return; }
     if (!signerUuid) {
       await requestSigner();
       return;
     }
-    // IF DATE IS SET -> USE SERVER SCHEDULE
+    // Logic Split
     if (targetDate) {
       await handleServerSchedule();
     } else {
-      // IF NO DATE -> CAST IMMEDIATELY
       await handleCastDirectly(text);
     }
   };
 
-  // --- NEW: SERVER-SIDE SCHEDULING (Replaces the local timer) ---
+  // --- SERVER-SIDE SCHEDULING ---
   const handleServerSchedule = async () => {
     setLoading(true);
     setStatus({msg: 'Scheduling on server...', type: 'neutral'});
     try {
+      // Calculate delay in SECONDS locally on the phone (fixes timezone issues)
+      const now = new Date().getTime();
+      const target = new Date(targetDate).getTime();
+      const delaySeconds = Math.floor((target - now) / 1000);
+
+      if (delaySeconds < 1) {
+         setStatus({msg: "Please verify your scheduled time.", type: 'error'});
+         setLoading(false);
+         return;
+      }
+
       const response = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Send delaySeconds instead of targetDate
         body: JSON.stringify({ 
           text: text, 
           signerUuid: signerUuid,
-          targetDate: targetDate
+          delaySeconds: delaySeconds
         }),
       });
       const data = await response.json();
@@ -109,7 +128,7 @@ function CastKeeperApp() {
       const data = await response.json();
       if (data.success) {
         setStatus({msg: 'Published successfully!', type: 'success'});
-        if (!isScheduled) setText(''); 
+        setText(''); 
       } else {
         setStatus({msg: "Error: " + data.error, type: 'error'});
       }
@@ -117,7 +136,7 @@ function CastKeeperApp() {
     finally { setLoading(false); }
   };
 
-  // --- REQUEST SIGNER ---
+  // --- REQUEST SIGNER (DEEP LINK FIXED) ---
   const requestSigner = async () => {
     setLoading(true);
     setStatus({msg: 'Requesting permission...', type: 'neutral'});
@@ -126,9 +145,13 @@ function CastKeeperApp() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Signer Setup Failed');
       
-      let deepLink = data.link;
-      // Force Android Deep Link
-      if (deepLink.startsWith("https://warpcast.com/")) deepLink = deepLink.replace("https://warpcast.com/", "warpcast://");
+      // Manual Deep Link Construction for Android
+      let deepLink = "";
+      if (data.public_key) {
+          deepLink = "warpcast://add-signer?public_key=" + data.public_key + "&name=CastKeeper";
+      } else {
+          deepLink = data.link.replace("https://warpcast.com/", "warpcast://");
+      }
 
       setApprovalUrl(deepLink);
       sdk.actions.openUrl(deepLink);
@@ -165,22 +188,40 @@ function CastKeeperApp() {
   };
 
   const startSchedule = () => {
-    if (!targetDate) return;
     setIsScheduled(true);
-    setStatus({msg: 'Scheduled! Keep tab open.', type: 'neutral'});
+    setStatus({msg: 'Select a date & time', type: 'neutral'});
+  };
+
+  const resetSchedule = () => {
+    setIsScheduled(false);
+    setTimeLeft('');
+    setStatus({msg: 'Schedule cancelled', type: 'neutral'});
   };
 
   useEffect(() => {
-    if (user?.fid) {
-      const savedDrafts = localStorage.getItem("drafts_" + user.fid); 
-      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
-    }
-  }, [user?.fid]);
+    if (!isScheduled || !targetDate) return;
+    const checkTime = () => {
+      const now = Date.now();
+      const target = new Date(targetDate).getTime();
+      const diff = target - now;
+      if (diff <= 0) {
+         // This is visual only for the UI, not used for posting
+      } else {
+        const seconds = Math.floor((diff / 1000) % 60);
+        const minutes = Math.floor((diff / 1000 / 60) % 60);
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        setTimeLeft(days + "d " + hours + "h " + minutes + "m " + seconds + "s");
+      }
+    };
+    timerRef.current = setInterval(checkTime, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isScheduled, targetDate]);
 
-  // Login Screen
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0a0a0a] text-center p-6 relative overflow-hidden font-sans z-50">
+        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-purple-900/20 blur-[120px] pointer-events-none" />
         <div className="z-10 max-w-md w-full space-y-10">
           <div className="space-y-4">
             <h1 className="text-5xl font-medium text-white tracking-tight">CastKeeper</h1>
@@ -197,7 +238,6 @@ function CastKeeperApp() {
     );
   }
 
-  // Dashboard
   return (
     <div className="w-full max-w-lg space-y-6 relative z-10">
       <div className="flex justify-between items-center px-2">
@@ -213,7 +253,7 @@ function CastKeeperApp() {
                   disabled={loading || !text} 
                   className="flex-1 flex items-center justify-center py-3 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:scale-[1.02] transition-all"
                 >
-                  {loading ? (signerUuid ? 'Scheduling...' : 'Waiting...') : (targetDate ? <><ClockIcon /> Schedule</> : <><SendIcon /> Cast Now</>)}
+                  {loading ? (signerUuid ? 'Casting...' : 'Waiting...') : (targetDate ? <><ClockIcon /> Schedule</> : <><SendIcon /> Cast Now</>)}
                 </button>
                 <button onClick={saveDraft} disabled={!text} className="bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 p-3 rounded-xl transition-colors"><SaveIcon /></button>
              </div>
@@ -228,8 +268,14 @@ function CastKeeperApp() {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500"><ClockIcon /></div>
                     <input type="datetime-local" className="w-full bg-black/50 border border-gray-700 text-white text-sm rounded-lg pl-10 pr-3 py-2.5 outline-none focus:border-purple-500 transition-colors" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
                   </div>
-                  <button onClick={() => setIsScheduled(true)} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Set Time</button>
+                  <button onClick={startSchedule} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-700 transition-colors">Schedule</button>
                 </div>
+              ) : (
+                <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl flex justify-between items-center animate-pulse">
+                  <div className="flex items-center text-purple-200 font-mono"><ClockIcon /> <span className="font-bold tracking-wider">{timeLeft}</span></div>
+                  <button onClick={resetSchedule} className="text-xs bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/30 transition-colors border border-red-500/20">Cancel</button>
+                </div>
+              )}
             </div>
           </div>
       </div>
