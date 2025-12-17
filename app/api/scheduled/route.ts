@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import { createPool } from '@vercel/postgres';
 
-// Initialize database table (runs once)
+const pool = createPool({
+  connectionString: process.env.POSTGRES_URL,
+});
+
 async function initDB() {
   try {
-    await sql`
+    await pool.sql`
       CREATE TABLE IF NOT EXISTS scheduled_posts (
         id TEXT PRIMARY KEY,
         fid INTEGER NOT NULL,
@@ -22,7 +25,6 @@ async function initDB() {
   }
 }
 
-// GET - Fetch scheduled posts for a user
 export async function GET(request: Request) {
   try {
     await initDB();
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'FID required' }, { status: 400 });
     }
 
-    const { rows } = await sql`
+    const { rows } = await pool.sql`
       SELECT * FROM scheduled_posts 
       WHERE fid = ${parseInt(fid)} AND status = 'pending'
       ORDER BY scheduled_time ASC
@@ -47,7 +49,6 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Create a scheduled post
 export async function POST(request: Request) {
   try {
     await initDB();
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
 
     const id = Date.now().toString();
     
-    await sql`
+    await pool.sql`
       INSERT INTO scheduled_posts 
       (id, fid, text, scheduled_time, signer_uuid, channel_id, embeds, status)
       VALUES (
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
       )
     `;
 
-    const { rows } = await sql`
+    const { rows } = await pool.sql`
       SELECT * FROM scheduled_posts WHERE id = ${id}
     `;
 
@@ -93,7 +94,6 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE - Delete a scheduled post
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -103,7 +103,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    await sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
+    await pool.sql`DELETE FROM scheduled_posts WHERE id = ${postId}`;
 
     return NextResponse.json({ success: true });
   } catch (error) {
