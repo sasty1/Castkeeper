@@ -35,7 +35,6 @@ function CastKeeperApp() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
-  const [scheduledPosts, setScheduledPosts] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -55,22 +54,10 @@ function CastKeeperApp() {
 
   useEffect(() => {
     if (user?.fid) {
-      fetchScheduledPosts();
       const savedDrafts = localStorage.getItem("drafts_" + user.fid);
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
     }
   }, [user?.fid]);
-
-  const fetchScheduledPosts = async () => {
-    if (!user?.fid) return;
-    try {
-      const response = await fetch(`/api/scheduled?fid=${user.fid}`);
-      const data = await response.json();
-      setScheduledPosts(data.posts || []);
-    } catch (error) {
-      console.error('Error fetching scheduled posts:', error);
-    }
-  };
 
   const handleNativeLogin = async () => {
     setLoading(true);
@@ -235,11 +222,10 @@ function CastKeeperApp() {
     }
     setLoading(true);
     try {
-      const response = await fetch('/api/scheduled', {
+      const response = await fetch('/api/schedule-qstash', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fid: user.fid,
           text,
           scheduledTime: targetDate,
           signerUuid,
@@ -257,13 +243,15 @@ function CastKeeperApp() {
       const data = await response.json();
       
       if (data.success) {
-        setStatus({ msg: '✅ Scheduled! Will post automatically.', type: 'success' });
+        setStatus({ 
+          msg: '✅ Scheduled! Will post at ' + new Date(targetDate).toLocaleString(), 
+          type: 'success' 
+        });
         setText('');
         setImages([]);
         setSelectedChannel(null);
         setTargetDate('');
-        fetchScheduledPosts();
-        setTimeout(() => setStatus(null), 3000);
+        setTimeout(() => setStatus(null), 5000);
       } else {
         throw new Error(data.error || 'Failed to schedule');
       }
@@ -272,21 +260,6 @@ function CastKeeperApp() {
       setStatus({ msg: 'Schedule failed: ' + error.message, type: 'error' });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const deleteScheduledPost = async (postId: string) => {
-    try {
-      const response = await fetch(`/api/scheduled?postId=${postId}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        setStatus({ msg: 'Scheduled post deleted', type: 'success' });
-        fetchScheduledPosts();
-        setTimeout(() => setStatus(null), 2000);
-      }
-    } catch (error) {
-      console.error('Error deleting post:', error);
     }
   };
 
@@ -538,33 +511,6 @@ function CastKeeperApp() {
           </div>
       </div>
 
-      {scheduledPosts.length > 0 && (
-        <div className="space-y-3 pt-2">
-          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Scheduled Posts</h3>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
-            {scheduledPosts.map((post: any) => (
-              <div 
-                key={post.id} 
-                className="group flex justify-between items-center p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl"
-              >
-                <div className="overflow-hidden flex-1">
-                  <p className="text-white text-sm truncate">{post.text}</p>
-                  <p className="text-purple-400 text-xs mt-1">
-                    📅 {new Date(post.scheduled_time).toLocaleString()}
-                  </p>
-                </div>
-                <button 
-                  onClick={() => deleteScheduledPost(post.id)} 
-                  className="text-gray-400 hover:text-red-400 p-2 transition-colors"
-                >
-                  <TrashIcon />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Saved Drafts</h3>
@@ -610,10 +556,9 @@ function CastKeeperApp() {
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 overflow-hidden relative">
-<div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
-       <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
-       <CastKeeperApp />
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-900/30 rounded-full blur-[100px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-900/30 rounded-full blur-[100px]" />
+      <CastKeeperApp />
     </main>
   );
 }
-
