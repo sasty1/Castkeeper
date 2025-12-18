@@ -35,6 +35,7 @@ function CastKeeperApp() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [scheduledPosts, setScheduledPosts] = useState<any[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -56,6 +57,17 @@ function CastKeeperApp() {
     if (user?.fid) {
       const savedDrafts = localStorage.getItem("drafts_" + user.fid);
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
+      
+      const savedScheduled = localStorage.getItem("scheduled_" + user.fid);
+      if (savedScheduled) {
+        const posts = JSON.parse(savedScheduled);
+        // Filter out posts that have already passed
+        const futurePosts = posts.filter((p: any) => new Date(p.scheduledTime) > new Date());
+        setScheduledPosts(futurePosts);
+        if (futurePosts.length !== posts.length) {
+          localStorage.setItem("scheduled_" + user.fid, JSON.stringify(futurePosts));
+        }
+      }
     }
   }, [user?.fid]);
 
@@ -211,6 +223,16 @@ function CastKeeperApp() {
     setTimeout(() => setStatus(null), 3000);
   };
 
+  const deleteScheduledPost = (postId: string) => {
+    const updatedPosts = scheduledPosts.filter(p => p.id !== postId);
+    setScheduledPosts(updatedPosts);
+    if (user?.fid) {
+      localStorage.setItem("scheduled_" + user.fid, JSON.stringify(updatedPosts));
+    }
+    setStatus({ msg: 'Scheduled post removed', type: 'success' });
+    setTimeout(() => setStatus(null), 2000);
+  };
+
   const startSchedule = async () => {
     if (!targetDate || !text) {
       alert('Please enter text and select a date/time');
@@ -243,6 +265,21 @@ function CastKeeperApp() {
       const data = await response.json();
       
       if (data.success) {
+        // Save to localStorage for display
+        const newScheduledPost = {
+          id: data.messageId || Date.now(),
+          text,
+          scheduledTime: targetDate,
+          channelId: selectedChannel,
+          images,
+        };
+        
+        const updatedScheduled = [newScheduledPost, ...scheduledPosts];
+        setScheduledPosts(updatedScheduled);
+        if (user?.fid) {
+          localStorage.setItem("scheduled_" + user.fid, JSON.stringify(updatedScheduled));
+        }
+        
         setStatus({ 
           msg: '✅ Scheduled! Will post at ' + new Date(targetDate).toLocaleString(), 
           type: 'success' 
@@ -510,6 +547,36 @@ function CastKeeperApp() {
             </div>
           </div>
       </div>
+
+      {scheduledPosts.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest px-2">Scheduled Posts</h3>
+          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+            {scheduledPosts.map((post: any) => (
+              <div 
+                key={post.id} 
+                className="group flex justify-between items-center p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl"
+              >
+                <div className="overflow-hidden flex-1">
+                  <p className="text-white text-sm truncate">{post.text}</p>
+                  <p className="text-purple-400 text-xs mt-1">
+                    📅 {new Date(post.scheduledTime).toLocaleString()}
+                  </p>
+                  {post.channelId && (
+                    <p className="text-gray-400 text-xs">📺 /{post.channelId}</p>
+                  )}
+                </div>
+                <button 
+                  onClick={() => deleteScheduledPost(post.id)} 
+                  className="text-gray-400 hover:text-red-400 p-2 transition-colors"
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {drafts.length > 0 && (
         <div className="space-y-3 pt-2">
