@@ -3,8 +3,14 @@ import { Pool } from 'pg';
 import { NeynarAPIClient } from '@neynar/nodejs-sdk';
 
 function getPool() {
+  const connectionString = process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error('Database connection string not configured');
+  }
+  
   return new Pool({
-    connectionString: process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL,
+    connectionString,
     ssl: {
       rejectUnauthorized: false
     }

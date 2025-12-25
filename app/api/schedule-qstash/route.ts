@@ -2,8 +2,14 @@ import { NextResponse } from 'next/server';
 import { Pool } from 'pg';
 
 function getPool() {
+  const connectionString = process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error('Database connection string not configured');
+  }
+  
   return new Pool({
-    connectionString: process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL,
+    connectionString,
     ssl: {
       rejectUnauthorized: false
     }
@@ -38,12 +44,14 @@ export async function POST(request: Request) {
     }
 
     // Save to database first
-    const result = await pool.query(
+    const postId = Date.now().toString(); // Generate unique ID
+    
+    await pool.query(
       `INSERT INTO scheduled_posts 
-       (user_fid, text, signer_uuid, channel_id, embeds, scheduled_time, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id`,
+       (id, fid, text, signer_uuid, channel_id, embeds, scheduled_time, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
+        postId,
         userFid || 0,
         text,
         signerUuid,
@@ -53,8 +61,6 @@ export async function POST(request: Request) {
         'pending'
       ]
     );
-
-    const postId = result.rows[0].id;
 
     // Create the payload for publishing
     const publishPayload = {
