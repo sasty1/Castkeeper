@@ -58,18 +58,23 @@ function CastKeeperApp() {
       const savedDrafts = localStorage.getItem("drafts_" + user.fid);
       if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
       
-      const savedScheduled = localStorage.getItem("scheduled_" + user.fid);
-      if (savedScheduled) {
-        const posts = JSON.parse(savedScheduled);
-        // Filter out posts that have already passed
-        const futurePosts = posts.filter((p: any) => new Date(p.scheduledTime) > new Date());
-        setScheduledPosts(futurePosts);
-        if (futurePosts.length !== posts.length) {
-          localStorage.setItem("scheduled_" + user.fid, JSON.stringify(futurePosts));
-        }
-      }
+      // Fetch scheduled posts from database
+      fetchScheduledPosts();
     }
   }, [user?.fid]);
+
+  const fetchScheduledPosts = async () => {
+    if (!user?.fid) return;
+    try {
+      const response = await fetch(`/api/scheduled?fid=${user.fid}`);
+      const data = await response.json();
+      if (data.posts) {
+        setScheduledPosts(data.posts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch scheduled posts:', error);
+    }
+  };
 
   const handleNativeLogin = async () => {
     setLoading(true);
@@ -223,14 +228,19 @@ function CastKeeperApp() {
     setTimeout(() => setStatus(null), 3000);
   };
 
-  const deleteScheduledPost = (postId: string) => {
-    const updatedPosts = scheduledPosts.filter(p => p.id !== postId);
-    setScheduledPosts(updatedPosts);
-    if (user?.fid) {
-      localStorage.setItem("scheduled_" + user.fid, JSON.stringify(updatedPosts));
+  const deleteScheduledPost = async (postId: string) => {
+    try {
+      await fetch(`/api/scheduled?postId=${postId}`, {
+        method: 'DELETE',
+      });
+      const updatedPosts = scheduledPosts.filter(p => p.id !== postId);
+      setScheduledPosts(updatedPosts);
+      setStatus({ msg: 'Scheduled post removed', type: 'success' });
+      setTimeout(() => setStatus(null), 2000);
+    } catch (error) {
+      console.error('Failed to delete scheduled post:', error);
+      setStatus({ msg: 'Failed to remove post', type: 'error' });
     }
-    setStatus({ msg: 'Scheduled post removed', type: 'success' });
-    setTimeout(() => setStatus(null), 2000);
   };
 
   const startSchedule = async () => {
@@ -251,6 +261,7 @@ function CastKeeperApp() {
           text,
           scheduledTime: targetDate,
           signerUuid,
+          userFid: user?.fid,
           channelId: selectedChannel,
           embeds: images.map(url => ({ url })),
         }),
@@ -265,20 +276,8 @@ function CastKeeperApp() {
       const data = await response.json();
       
       if (data.success) {
-        // Save to localStorage for display
-        const newScheduledPost = {
-          id: data.messageId || Date.now(),
-          text,
-          scheduledTime: targetDate,
-          channelId: selectedChannel,
-          images,
-        };
-        
-        const updatedScheduled = [newScheduledPost, ...scheduledPosts];
-        setScheduledPosts(updatedScheduled);
-        if (user?.fid) {
-          localStorage.setItem("scheduled_" + user.fid, JSON.stringify(updatedScheduled));
-        }
+        // Refresh scheduled posts from database
+        await fetchScheduledPosts();
         
         setStatus({ 
           msg: '✅ Scheduled! Will post at ' + new Date(targetDate).toLocaleString(), 
@@ -560,10 +559,10 @@ function CastKeeperApp() {
                 <div className="overflow-hidden flex-1">
                   <p className="text-white text-sm truncate">{post.text}</p>
                   <p className="text-purple-400 text-xs mt-1">
-                    📅 {new Date(post.scheduledTime).toLocaleString()}
+                    📅 {new Date(post.scheduled_time || post.scheduledTime).toLocaleString()}
                   </p>
-                  {post.channelId && (
-                    <p className="text-gray-400 text-xs">📺 /{post.channelId}</p>
+                  {post.channel_id && (
+                    <p className="text-gray-400 text-xs">📺 /{post.channel_id}</p>
                   )}
                 </div>
                 <button 
